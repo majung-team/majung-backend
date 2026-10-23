@@ -23,10 +23,3 @@ dependencies {
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
 tasks.test { useJUnitPlatform() }
-
-tasks.processResources {
-    from("../web") {
-        into("static")
-        exclude("**/*.test.js", "package.json")
-    }
-}
