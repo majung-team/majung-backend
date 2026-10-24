@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
         "spring.datasource.url=jdbc:h2:mem:deployment-http;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         "spring.jpa.hibernate.ddl-auto=validate", "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:db/initial-schema.sql",
-        "majung.deployment=true", "majung.creation-key=test-only-not-a-real-key-0123456789",
+        "majung.deployment=true", "majung.admin-key=test-only-not-a-real-key-0123456789",
         "majung.development-tools=false", "majung.retention.enabled=true",
         "majung.retention.cleanup-interval-ms=3600000",
         "majung.rate-limit.requests-per-minute=30", "majung.rate-limit.writes-per-minute=12"
@@ -38,9 +38,10 @@ class DeploymentHttpTest {
     @BeforeEach void newWindow() { clock.advance(Duration.ofMinutes(2)); }
 
     @Test void creationKeyIsRequiredAndNeverReturnedInConfiguration() throws Exception {
-        assertEquals(403, call("POST", "/api/v1/pickups", null, null, PLACE, null).statusCode());
-        assertEquals(403, call("POST", "/api/v1/pickups", "wrong", null, PLACE, null).statusCode());
-        assertEquals(201, call("POST", "/api/v1/pickups", TEST_KEY, null, PLACE, null).statusCode());
+        assertEquals(401, call("POST", "/api/v1/pickups", null, null, PLACE, null).statusCode());
+        assertEquals(401, call("POST", "/api/v1/pickups", "wrong", null, PLACE, null).statusCode());
+        assertEquals(401, call("POST", "/api/v1/pickups", TEST_KEY, null, PLACE, null).statusCode());
+        assertEquals(201, call("POST", "/api/v1/pickups", null, register(), PLACE, null).statusCode());
         HttpResponse<String> configuration = call("GET", "/api/v1/config", null, null, null, null);
         assertEquals(200, configuration.statusCode());
         assertEquals("{\"developmentToolsEnabled\":false}", configuration.body());
@@ -48,7 +49,7 @@ class DeploymentHttpTest {
     }
 
     @Test void pickupTokensStillAllowPassengerFlowWithoutCreationKey() throws Exception {
-        JsonNode created = json.readTree(call("POST", "/api/v1/pickups", TEST_KEY, null, PLACE, null).body());
+        JsonNode created = json.readTree(call("POST", "/api/v1/pickups", null, register(), PLACE, null).body());
         String path = "/api/v1/pickups/" + created.path("pickupId").asText();
         String owner = created.path("driverToken").asText();
         JsonNode joined = json.readTree(call("POST", path + "/participants", null, null,
@@ -66,7 +67,7 @@ class DeploymentHttpTest {
 
     @Test void forgedForwardedAddressesCannotBypassWriteLimit() throws Exception {
         for (int i = 0; i < 12; i++) {
-            assertEquals(403, call("POST", "/api/v1/pickups", null, null, PLACE, "192.0.2." + i).statusCode());
+            assertEquals(401, call("POST", "/api/v1/pickups", null, null, PLACE, "192.0.2." + i).statusCode());
         }
         HttpResponse<String> rejected = call("POST", "/api/v1/pickups", TEST_KEY, null, PLACE, "198.51.100.1");
         assertEquals(429, rejected.statusCode());
@@ -76,6 +77,13 @@ class DeploymentHttpTest {
         assertEquals("RATE_LIMITED", body.path("code").asText());
         assertFalse(body.path("requestId").asText().isBlank());
         assertEquals(200, call("GET", "/api/v1/config", null, null, null, null).statusCode());
+    }
+
+    private String register() throws Exception {
+        JsonNode issued = json.readTree(call("POST", "/api/v1/admin/vehicle-registration-codes", null, TEST_KEY, null, null).body());
+        JsonNode registered = json.readTree(call("POST", "/api/v1/vehicles/registrations", null, null,
+                "{\"code\":\"" + issued.path("code").asText() + "\",\"displayName\":\"시험 차량\"}", null).body());
+        return registered.path("vehicleToken").asText();
     }
 
     private HttpResponse<String> call(String method, String path, String key, String token,

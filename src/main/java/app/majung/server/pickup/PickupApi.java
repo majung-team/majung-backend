@@ -59,9 +59,8 @@ class PickupApi {
     @PostMapping(consumes = "application/json")
     @ResponseStatus(HttpStatus.CREATED)
     Created create(@Valid @RequestBody CreateRequest request,
-                   @RequestHeader(value = "X-Majung-Creation-Key", required = false) String creationKey) {
-        deploymentPolicy.requireCreationKey(creationKey);
-        return pickupService.createPickup(request.place());
+                   @RequestHeader(value = "Authorization", required = false) String authorization) {
+        return pickupService.createPickup(request.place(), authorization);
     }
 
     @PostMapping(value = "/{id}/participants", consumes = "application/json")

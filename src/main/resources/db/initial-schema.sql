@@ -3,6 +3,7 @@
 CREATE TABLE pickup (
     id UUID PRIMARY KEY,
     version BIGINT NOT NULL,
+    vehicle_id UUID,
     owner_hash VARCHAR(255),
     invite_hash VARCHAR(255),
     invite_expires_at TIMESTAMP(6) WITH TIME ZONE,
@@ -27,3 +28,21 @@ CREATE TABLE pickup (
 );
 CREATE INDEX pickup_retention_ended ON pickup (ended_at);
 CREATE INDEX pickup_retention_expires ON pickup (expires_at);
+
+CREATE TABLE registered_vehicle (
+    id UUID PRIMARY KEY,
+    version BIGINT NOT NULL,
+    credential_hash VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(255) NOT NULL,
+    registered_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    revoked_at TIMESTAMP(6) WITH TIME ZONE
+);
+CREATE TABLE vehicle_registration_code (
+    id UUID PRIMARY KEY,
+    version BIGINT NOT NULL,
+    code_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    consumed_at TIMESTAMP(6) WITH TIME ZONE,
+    vehicle_id UUID
+);
+CREATE INDEX pickup_vehicle ON pickup (vehicle_id);

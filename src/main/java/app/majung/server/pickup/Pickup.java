@@ -18,6 +18,7 @@ class Pickup {
     UUID id;
     @Version
     long version;
+    UUID vehicleId;
     String ownerHash;
     String inviteHash;
     Instant inviteExpiresAt;

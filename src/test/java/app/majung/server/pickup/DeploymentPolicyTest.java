@@ -13,15 +13,15 @@ class DeploymentPolicyTest {
     @Test void localCreationDoesNotNeedKey() {
         DeploymentPolicy policy = policy(false, "", true, false, true);
         assertTrue(policy.developmentToolsEnabled());
-        assertDoesNotThrow(() -> policy.requireCreationKey(null));
+        assertThrows(ApiException.class, () -> policy.requireAdmin(null));
     }
 
     @Test void configuredKeyIsRequiredAndHidesDevelopmentToolsEvenLocally() {
         DeploymentPolicy policy = policy(false, TEST_KEY, true, false, true);
         assertFalse(policy.developmentToolsEnabled());
-        assertThrows(ApiException.class, () -> policy.requireCreationKey(null));
-        assertThrows(ApiException.class, () -> policy.requireCreationKey(TEST_KEY + "x"));
-        assertDoesNotThrow(() -> policy.requireCreationKey(TEST_KEY));
+        assertThrows(ApiException.class, () -> policy.requireAdmin(null));
+        assertThrows(ApiException.class, () -> policy.requireAdmin("Bearer " + TEST_KEY + "x"));
+        assertDoesNotThrow(() -> policy.requireAdmin("Bearer " + TEST_KEY));
     }
 
     @Test void deploymentRejectsMissingKeyOrDisabledSafeguards() {
