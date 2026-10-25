@@ -25,3 +25,7 @@ dist/
 !.env.example
 *.pem
 *.key
+
+# Generated release metadata and temporary OIDC credentials
+src/main/resources/majung-release.txt
+gha-creds-*.json
