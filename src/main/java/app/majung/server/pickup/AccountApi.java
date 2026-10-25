@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,7 +28,7 @@ class AccountApi {
     }
     @GetMapping("/api/v1/auth/session")
     Session session(Authentication authentication, CsrfToken csrf) {
-        UUID id = memberIdOrNull(authentication);
+        UUID id = AccountIdentity.memberOrNull(authentication);
         return new Session(enabled, id != null, id == null ? null : MemberService.profile(memberService.current(id)), csrf.getToken());
     }
     @GetMapping("/api/v1/auth/login")
@@ -39,37 +38,27 @@ class AccountApi {
         response.setHeader("Location", "/api/v1/auth/authorize/kakao");
     }
     @GetMapping("/api/v1/accounts/me")
-    Profile me(Authentication authentication) { return MemberService.profile(memberService.current(memberId(authentication))); }
+    Profile me(Authentication authentication) { return MemberService.profile(memberService.current(AccountIdentity.requireMember(authentication))); }
     @PatchMapping("/api/v1/accounts/me")
     Profile nickname(Authentication authentication, @Valid @RequestBody Nickname request) {
-        return memberService.nickname(memberId(authentication), request.nickname());
+        return memberService.nickname(AccountIdentity.requireMember(authentication), request.nickname());
     }
     @GetMapping("/api/v1/accounts/search")
     List<SearchResult> search(Authentication authentication, @RequestParam String query,
                               @RequestParam(defaultValue = "0") int page) {
-        return memberService.search(memberId(authentication), query, page);
+        return memberService.search(AccountIdentity.requireMember(authentication), query, page);
     }
     @GetMapping("/api/v1/connections")
     List<Connection> connections(Authentication authentication, @RequestParam(defaultValue = "0") int page) {
-        return memberService.connections(memberId(authentication), page);
+        return memberService.connections(AccountIdentity.requireMember(authentication), page);
     }
     @PostMapping("/api/v1/connections")
     Connection request(Authentication authentication, @RequestBody Target target) {
         if (target.memberId() == null) throw new ApiException(400, "TARGET_REQUIRED", "연결할 사람을 선택해주세요.");
-        return memberService.request(memberId(authentication), target.memberId());
+        return memberService.request(AccountIdentity.requireMember(authentication), target.memberId());
     }
     @PostMapping("/api/v1/connections/{id}/{action}")
     Connection change(Authentication authentication, @PathVariable UUID id, @PathVariable String action) {
-        return memberService.change(memberId(authentication), id, action);
-    }
-    private UUID memberId(Authentication authentication) {
-        UUID id = memberIdOrNull(authentication);
-        if (id == null) throw new ApiException(401, "LOGIN_REQUIRED", "로그인이 필요해요.");
-        return id;
-    }
-    private UUID memberIdOrNull(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof OAuth2User principal)) return null;
-        try { return UUID.fromString(principal.getName()); }
-        catch (IllegalArgumentException exception) { return null; }
+        return memberService.change(AccountIdentity.requireMember(authentication), id, action);
     }
 }

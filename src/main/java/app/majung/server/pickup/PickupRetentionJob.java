@@ -15,12 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 class PickupRetentionJob {
     private static final Logger log = LoggerFactory.getLogger(PickupRetentionJob.class);
     private final PickupRepository pickupRepository;
+    private final RideRequestRepository rideRequests;
     private final Clock clock;
     private final Duration retention;
 
-    PickupRetentionJob(PickupRepository pickupRepository, Clock clock,
+    PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, Clock clock,
                        @Value("${majung.retention.period:PT24H}") Duration retention) {
         this.pickupRepository = pickupRepository;
+        this.rideRequests = rideRequests;
         this.clock = clock;
         this.retention = retention;
     }
@@ -29,6 +31,7 @@ class PickupRetentionJob {
     @Scheduled(fixedDelayString = "${majung.retention.cleanup-interval-ms:300000}",
                initialDelayString = "${majung.retention.cleanup-interval-ms:300000}")
     public int purgeExpiredPickups() {
+        rideRequests.deleteRetainedBefore(clock.instant().minus(retention));
         int deleted = pickupRepository.deleteRetainedBefore(clock.instant().minus(retention));
         if (deleted > 0) log.info("Retained pickups removed: count={}", deleted);
         return deleted;

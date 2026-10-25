@@ -41,7 +41,7 @@ class ApiErrorHandler {
                 "요청 경로·메서드·Content-Type을 확인해주세요.", (String) request.getAttribute("requestId")));
     }
 
-    @ExceptionHandler(PessimisticLockingFailureException.class)
+    @ExceptionHandler({PessimisticLockingFailureException.class, org.springframework.orm.ObjectOptimisticLockingFailureException.class})
     ResponseEntity<ErrorResponse> handleConcurrentRequest(Exception exception, HttpServletRequest request) {
         return ResponseEntity.status(409).body(new ErrorResponse("RETRY_REQUEST",
                 "다른 요청을 처리 중입니다. 상태를 조회한 뒤 다시 시도해주세요.", (String) request.getAttribute("requestId")));

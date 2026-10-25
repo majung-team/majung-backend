@@ -215,6 +215,16 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
+    // Called only after RideRequestService has checked the signed-in passenger and active request.
+    PickupApi.Snapshot snapshotForAccount(UUID id) { return toPickupResponse(locked(id), false); }
+    PickupApi.VehicleState vehicleForAccount(UUID id) { Pickup pickup=locked(id); requireSharing(pickup); return toVehicleResponse(pickup); }
+    PickupApi.Snapshot readinessForAccount(UUID id, PickupApi.ReadinessRequest request) {
+        Pickup pickup=locked(id); requireSharing(pickup);
+        if (request.sequence()==pickup.readinessSequence && request.readiness()==pickup.readiness) return toPickupResponse(pickup,false);
+        if (request.sequence()<=pickup.readinessSequence) throw error(409,"STALE_EVENT","준비 상태를 다시 확인해주세요.");
+        pickup.readiness=request.readiness(); pickup.readinessSequence=request.sequence(); return toPickupResponse(pickup,false);
+    }
+
     private Pickup locked(UUID id) {
         return pickupRepository.findLockedById(id)
                 .orElseThrow(() -> error(404, "PICKUP_NOT_FOUND", "픽업을 찾을 수 없습니다."));

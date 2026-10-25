@@ -54,7 +54,7 @@ class AccountSecurity {
     SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members,
             ObjectProvider<OAuth2AuthorizedClientService> authorizedClients,
             @Value("${majung.login.enabled:false}") boolean enabled) throws Exception {
-        http.securityMatcher("/api/v1/auth/**", "/api/v1/accounts/**", "/api/v1/connections/**")
+        http.securityMatcher("/api/v1/auth/**", "/api/v1/accounts/**", "/api/v1/connections/**", "/api/v1/vehicle-links/**", "/api/v1/ride-requests/**")
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/auth/kakao/unlink", "/api/v1/auth/session", "/api/v1/auth/login", "/api/v1/auth/authorize/**", "/api/v1/auth/callback/**").permitAll()
                         .anyRequest().authenticated())

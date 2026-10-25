@@ -18,6 +18,8 @@ interface PickupRepository extends JpaRepository<Pickup, UUID> {
     @Query("select p from Pickup p where p.vehicleId = :vehicleId order by p.id")
     java.util.List<Pickup> findLockedByVehicleId(UUID vehicleId);
 
+    java.util.List<Pickup> findByVehicleId(UUID vehicleId);
+
     @Modifying
     @Query("delete from Pickup p where p.endedAt <= :cutoff or (p.endedAt is null and p.expiresAt <= :cutoff)")
     int deleteRetainedBefore(Instant cutoff);
