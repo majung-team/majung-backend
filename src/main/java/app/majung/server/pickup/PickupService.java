@@ -15,11 +15,14 @@ class PickupService {
     private final PickupRepository pickupRepository;
     private final TokenService tokenService;
     private final Clock clock;
+    private final VehicleRegistrationService vehicleRegistrationService;
+    private final DeploymentPolicy deploymentPolicy;
     private final Duration inviteTtl;
     private final Duration pickupTtl;
     private final Duration vehicleFreshness;
 
     PickupService(PickupRepository pickupRepository, TokenService tokenService, Clock clock,
+                  VehicleRegistrationService vehicleRegistrationService, DeploymentPolicy deploymentPolicy,
                   @Value("${majung.invite-ttl}") Duration inviteTtl,
                   @Value("${majung.pickup-ttl}") Duration pickupTtl,
                   @Value("${majung.vehicle-freshness}") Duration vehicleFreshness) {
@@ -30,17 +33,22 @@ class PickupService {
         this.pickupRepository = pickupRepository;
         this.tokenService = tokenService;
         this.clock = clock;
+        this.vehicleRegistrationService = vehicleRegistrationService;
+        this.deploymentPolicy = deploymentPolicy;
         this.inviteTtl = inviteTtl;
         this.pickupTtl = pickupTtl;
         this.vehicleFreshness = vehicleFreshness;
     }
 
-    PickupApi.Created createPickup(PickupApi.Place place) {
+    PickupApi.Created createPickup(PickupApi.Place place, String authorization) {
+        RegisteredVehicle vehicle = authorization == null && deploymentPolicy.developmentToolsEnabled()
+                ? null : vehicleRegistrationService.requireActive(authorization);
         Instant now = clock.instant();
         String ownerToken = tokenService.issue();
         String inviteToken = tokenService.issue();
         Pickup pickup = Pickup.create(tokenService.hash(ownerToken), tokenService.hash(inviteToken),
                 now, now.plus(inviteTtl), now.plus(pickupTtl), place);
+        pickup.vehicleId = vehicle == null ? null : vehicle.id;
         pickupRepository.save(pickup);
         return new PickupApi.Created(pickup.id, ownerToken, inviteToken, pickup.inviteExpiresAt, pickup.expiresAt);
     }

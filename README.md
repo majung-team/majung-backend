@@ -13,6 +13,10 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 웹은 majung-web에서 따로 실행한다. 서버 JAR는 인접 웹 디렉터리를 읽지 않는다.
 환경변수·deploy 프로필·스키마는 deploy/와 src/main/resources/를 확인한다.
 
+## 차량 최초 등록
+
+[등록 코드 발급·차량 권한·개별 철회 안내](docs/vehicle-registration.md)를 확인한다. 관리 공통 키로 픽업을 만드는 방식은 차량별 등록 권한으로 교체했다. 기존 배포 DB에는 스키마 업그레이드와 관리자 환경변수 변경이 필요하다.
+
 ## 협업
 
 `npm ci`로 커밋 검사 훅을 설치한다. 성모·승준 모두 기능별로 서버·웹·차량 변경을 함께 맡는다.
