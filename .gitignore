@@ -19,3 +19,9 @@ backups/
 data/
 __pycache__/
 dist/
+
+# Server credentials and local environment variants
+.env.*
+!.env.example
+*.pem
+*.key
