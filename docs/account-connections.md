@@ -79,3 +79,11 @@ PENDING → ACCEPTED / REJECTED / CANCELLED, ACCEPTED → DISCONNECTED. 상대�
 로컬 HTTP 공급자 시험에서 잘못된 키·다른 앱 ID 거절, 중복 수신, 정리 전 접근 차단, 계정·연결 삭제, 재처리와 상대 계정 유지까지 확인했다.
 
 - [카카오 연결 해제 웹훅 명세](https://developers.kakao.com/docs/ko/kakaologin/callback)
+
+## 브라우저 연동 확인 · 2026-10-25
+
+로그인 시작·성공·실패는 고정 상대 경로의 Location 헤더를 사용한다. 프록시의 내부 Host나 HTTP 주소로 브라우저를 이동시키지 않는다. 성공 주소는 `/account.html`, 실패 주소는 `/account.html?login=failed`다.
+
+수동 브라우저 시험은 `MAJUNG_BROWSER_FIXTURE=true ./gradlew test --tests '*AccountBrowserFixtureTest'`로 별도 실행한다. API는 loopback 18081, 웹은 `MAJUNG_API_PORT=18081 MAJUNG_WEB_PORT=18082 npm start`로 실행한다. 가상 공급자에서 시험 계정 1·2를 선택하며 실제 카카오 계정이나 키는 사용하지 않는다. 15분 뒤 자동 종료되고 JVM 임시 디렉터리에 `majung-browser-fixture.stop`을 만들어 먼저 종료할 수 있다. 일반 자동 시험에서는 이 수동 시험 한 개를 건너뛴다.
+
+실제 Tomcat·DB·Spring Security와 브라우저에서 두 계정의 닉네임 설정·검색·연결 요청·수락·해제를 확인했다. HTTP·Secure 쿠키 해제는 이 시험 클래스에만 지정돼 있으며 배포 JAR에는 시험 클래스가 들어가지 않는다.
