@@ -21,3 +21,7 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 [개정 명세 대조와 작업 순서](docs/revised-plan.md)를 확인한다. 아직 구현하지 않은 기능과 현재 기준 동작을 구분해 적었다.
 
 [카카오 가입·닉네임 검색·연결 API](docs/account-connections.md): 서버 환경변수, 세션·CSRF, DB 업그레이드와 검증 범위.
+
+## GitHub Actions
+
+[테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.
