@@ -105,11 +105,11 @@ class AccountSecurity {
                         OAuth2AuthorizedClientService clients = authorizedClients.getIfAvailable();
                         if (clients != null) clients.removeAuthorizedClient("kakao", authentication.getName());
                         response.setStatus(302);
-                        response.setHeader("Location", "/account.html");
+                        response.setHeader("Location", "/account");
                     })
                     .failureHandler((request, response, exception) -> {
                         response.setStatus(302);
-                        response.setHeader("Location", "/account.html?login=failed");
+                        response.setHeader("Location", "/account?login=failed");
                     }));
         }
         http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/auth/kakao/unlink"));
