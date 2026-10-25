@@ -29,3 +29,7 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 ## GitHub Actions
 
 [테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.
+
+## 탑승자가 먼저 보내는 요청
+
+차량 QR이나 기존 연결 없이 운전자를 검색해 장소와 함께 요청한다. 운전자는 여러 요청을 수락해 대기에 넣고 현재 픽업을 마친 뒤 차례대로 시작한다. [사용 방법과 현재 검증 범위](docs/ride-requests.md)를 참고한다. 새 흐름의 공개 배포 상태는 PR 반영과 구분한다.
