@@ -40,6 +40,7 @@ class RideRequestTest {
     @Autowired PickupService pickups;
     @Autowired PickupApiTest.MutableClock clock;
     @Autowired WebApplicationContext context;
+    @org.junit.jupiter.api.BeforeEach void resetClock() { clock.reset(); }
     Member member() { Member m=members.login(""+subjects.incrementAndGet()); members.nickname(m.id,"가상회원"); return m; }
     record Driver(Member member,String auth) { }
     Driver driver() {

@@ -23,6 +23,7 @@ class VehicleAccountTest {
     @Autowired MemberService members;
     @Autowired PickupApiTest.MutableClock clock;
 
+    @org.junit.jupiter.api.BeforeEach void resetClock() { clock.reset(); }
     Member member() { Member m = members.login("" + subjects.incrementAndGet()); members.nickname(m.id, "가상회원"); return m; }
     String vehicle() { var code = vehicles.issueCode(); return "Bearer " + vehicles.register(new VehicleRegistrationApi.Registration(code.code(), "시험 차량")).vehicleToken(); }
     @Test void phoneRequestNeedsExplicitVehicleConfirmation() {
