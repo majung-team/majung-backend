@@ -9,7 +9,7 @@ PR에서는 테스트·빌드를 실행한다. main push에서도 같은 검사�
 - 자동 배포: main + `MAJUNG_DEPLOY_ENABLED=true`일 때 실행
 - 수동 배포: 워크플로를 main에서 직접 실행하면 자동 배포 설정과 무관하게 검사 후 배포
 
-현재 자동 배포 설정은 false다. 코드 병합 후 main의 워크플로를 수동 실행해 실제 인증·전송·교체·상태 확인을 검증하고 true로 바꾼다. CI 파일 작성·로컬 시험과 실제 GitHub 실행 성공은 구분한다.
+서버는 첫 수동 배포를 확인한 뒤 자동 배포를 켰다. 웹의 검증 결과와 설정은 웹 저장소의 배포 문서에 기록한다. 실패한 deploy 작업만 재실행하면 통과한 test 작업은 반복하지 않고 같은 빌드 파일을 사용한다. 워크플로 전체를 수동 실행하면 테스트부터 다시 수행한다.
 
 ## 인증과 대상
 
@@ -27,6 +27,8 @@ GitHub 저장소 Secrets에 아래 **배포 설정**을 등록한다. 실제 값
 | GCP_SSH_HOST_KEY | 운영자가 서버에서 직접 확인한 SSH 공개 호스트 키 |
 
 `deploy/workflow.sh`는 대상 이름이 마중용인지, 실제 인스턴스 ID가 일치하는지 확인한다. IAP로 접속하며 고정한 호스트 키를 검증한다. 바이너리는 stdin으로 전송하고 SHA256과 커밋 SHA를 서버에서 다시 확인한다.
+
+배포 계정에는 마중 인스턴스의 `roles/compute.osLogin`과 `compute.instances.getGuestAttributes` 조회 권한이 필요하다. gcloud의 프로젝트 조회에는 `compute.projects.get`을 별도로 허용한다. IAP 접근은 같은 인스턴스의 SSH 포트로 제한한다. 관리자 역할이나 다른 서비스 인스턴스 권한은 부여하지 않는다.
 
 ## 서버에 한 번 설치하는 파일
 
@@ -46,6 +48,10 @@ DB 마이그레이션은 자동 실행하지 않는다. 스키마가 바뀌는 �
 
 ## 확인한 범위
 
-로컬 서버 테스트·빌드, actionlint, 셸 구문 검사와 아카이브·체크섬·버전·실패 복구 시험을 실행했다. 실제 GitHub OIDC·Actions 배포는 워크플로 병합 후 확인해야 한다. 자동 배포가 꺼져 있을 때 CD가 skipped인 것은 배포 성공을 의미하지 않는다.
+2026년 10월 25일 [서버 수동 실행](https://github.com/majung-team/majung-backend/actions/runs/40154730036)에서 테스트·빌드, OIDC 인증, IAP SSH 전송, JAR 교체와 상태 확인을 통과했다. 첫 실행은 `compute.instances.getGuestAttributes` 권한 부족으로 실패했다. 해당 조회 권한을 마중 인스턴스에 추가한 뒤 deploy 작업만 재실행해 성공했다.
+
+공개 HTTPS에서 `/api/v1/health`의 `UP`과 실행 커밋 SHA 일치를 확인했다. 미등록 차량 요청은 401, 외부 관리자 경로는 404로 차단됐다. 카카오 로그인은 서버 설정상 꺼져 있으며 실제 사용자 로그인·연결 해제 콜백 검증은 별도 작업으로 남아 있다.
+
+로컬에서는 서버 테스트·빌드, actionlint, 셸 구문 검사와 아카이브·체크섬·버전·실패 복구 시험을 실행했다. 실제 배포 중 장애를 발생시킨 복구 시험이나 실차 시험까지 통과한 것은 아니다. 자동 배포가 꺼져 있을 때 CD가 skipped인 것은 배포 성공을 의미하지 않는다.
 
 공식 문서: [GitHub용 GCP 인증 Action](https://github.com/google-github-actions/auth), [배포 파이프라인의 Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines).
