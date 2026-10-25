@@ -104,7 +104,7 @@ class AccountFlowTest {
         MvcResult callback = mvc.perform(get("/api/v1/auth/callback/kakao").session(session)
                         .param("state", state).param("code", "fixture-code"))
                 .andReturn();
-        if (!"/account.html".equals(callback.getResponse().getRedirectedUrl())) {
+        if (!"/account".equals(callback.getResponse().getRedirectedUrl())) {
             Object failure = callback.getRequest().getSession().getAttribute("SPRING_SECURITY_LAST_EXCEPTION");
             throw new AssertionError("Fixture login failed", failure instanceof Throwable ? (Throwable) failure : null);
         }
@@ -136,16 +136,16 @@ class AccountFlowTest {
         MockHttpSession browser = (MockHttpSession) start.getRequest().getSession(false);
         String state = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(start.getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
         mvc.perform(get("/api/v1/auth/callback/kakao").param("state", state).param("code", "fixture-code"))
-                .andExpect(redirectedUrl("/account.html?login=failed"));
+                .andExpect(redirectedUrl("/account?login=failed"));
         assertEquals(before, memberRepository.count());
         mvc.perform(get("/api/v1/auth/callback/kakao").session(browser).param("state", "wrong").param("code", "fixture-code"))
-                .andExpect(redirectedUrl("/account.html?login=failed"));
+                .andExpect(redirectedUrl("/account?login=failed"));
         assertEquals(before, memberRepository.count());
         mvc.perform(get("/api/v1/auth/callback/kakao").session(browser).param("state", state).param("code", "fixture-code"))
-                .andExpect(redirectedUrl("/account.html"));
+                .andExpect(redirectedUrl("/account"));
         assertEquals(before + 1, memberRepository.count());
         mvc.perform(get("/api/v1/auth/callback/kakao").session(browser).param("state", state).param("code", "fixture-code"))
-                .andExpect(redirectedUrl("/account.html?login=failed"));
+                .andExpect(redirectedUrl("/account?login=failed"));
         assertEquals(before + 1, memberRepository.count());
     }
     @Test void profileAndSearchRequireLoginAndCsrfDoesNotAffectExistingBearerApi() throws Exception {

@@ -84,7 +84,7 @@ PENDING → ACCEPTED / REJECTED / CANCELLED, ACCEPTED → DISCONNECTED. 상대�
 
 ## 브라우저 연동 확인 · 2026-10-25
 
-로그인 시작·성공·실패는 고정 상대 경로의 Location 헤더를 사용한다. 프록시의 내부 Host나 HTTP 주소로 브라우저를 이동시키지 않는다. 성공 주소는 `/account.html`, 실패 주소는 `/account.html?login=failed`다.
+로그인 시작·성공·실패는 고정 상대 경로의 Location 헤더를 사용한다. 프록시의 내부 Host나 HTTP 주소로 브라우저를 이동시키지 않는다. 성공 주소는 `/account`, 실패 주소는 `/account?login=failed`다.
 
 수동 브라우저 시험은 `MAJUNG_BROWSER_FIXTURE=true ./gradlew test --tests '*AccountBrowserFixtureTest'`로 별도 실행한다. API는 loopback 18081, 웹은 `MAJUNG_API_PORT=18081 MAJUNG_WEB_PORT=18082 npm start`로 실행한다. 가상 공급자에서 시험 계정 1·2를 선택하며 실제 카카오 계정이나 키는 사용하지 않는다. 15분 뒤 자동 종료되고 JVM 임시 디렉터리에 `majung-browser-fixture.stop`을 만들어 먼저 종료할 수 있다. 일반 자동 시험에서는 이 수동 시험 한 개를 건너뛴다.
 
@@ -95,7 +95,7 @@ PENDING → ACCEPTED / REJECTED / CANCELLED, ACCEPTED → DISCONNECTED. 상대�
 
 - `/api/v1/auth/login`에서 고정된 서버 인증 경로로 302 이동한 뒤 카카오 인가 화면에 도달했다. PKCE의 S256 방식이 포함되고, 인가 주소의 콜백은 등록한 HTTPS 주소와 일치했다.
 - 새 로그인 세션 쿠키의 Secure·HttpOnly·SameSite=Lax 설정을 확인했다.
-- 로그인하지 않은 계정 조회는 401, 잘못된 state를 가진 실패 콜백은 `/account.html?login=failed`로 이동했다. 공급자 오류나 키를 화면에 표시하지 않았다.
+- 로그인하지 않은 계정 조회는 401, 잘못된 state를 가진 실패 콜백은 `/account?login=failed`로 이동했다. 공급자 오류나 키를 화면에 표시하지 않았다.
 - 웹훅의 잘못된 인증 키는 403으로 차단했다. 실제 계정이 없는 가상 회원번호를 사용한 정상 요청은 154ms에 200을 반환했고, 비동기 처리 대기 항목이 정리됐다. 이 요청은 운영 서버의 실제 키로 보냈지만 카카오가 발송한 이벤트는 아니다.
 - 카카오 동의 화면에서 마중에 제공하는 정보는 회원번호이며 이메일·사진·친구 목록을 요청하지 않았다. 사용자 동의 후 실제 카카오 계정으로 로그인해 마중 ID 발급과 닉네임 저장을 확인했다. 새로고침 후 세션이 유지됐고, 로그아웃 후 다시 로그인해도 기존 ID와 닉네임이 유지됐다. 실제 두 카카오 계정 사이 연결 요청·수락과 서비스 외부 연결 해제 통지 시험은 아직 수행하지 않았다.
 
