@@ -35,7 +35,8 @@ class AccountApi {
     @GetMapping("/api/v1/auth/login")
     void login(HttpServletResponse response) throws IOException {
         if (!enabled) throw new ApiException(503, "LOGIN_NOT_CONFIGURED", "로그인 준비 중이에요.");
-        response.sendRedirect("/api/v1/auth/authorize/kakao");
+        response.setStatus(302);
+        response.setHeader("Location", "/api/v1/auth/authorize/kakao");
     }
     @GetMapping("/api/v1/accounts/me")
     Profile me(Authentication authentication) { return MemberService.profile(memberService.current(memberId(authentication))); }

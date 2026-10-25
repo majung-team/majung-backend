@@ -6,14 +6,14 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Server-only creation gate for a limited trial, not account or vehicle identity. */
+/** Administrator bootstrap key stays on the server; it cannot create pickups. */
 @Component
 class DeploymentPolicy {
     private final String creationKey;
     private final boolean developmentToolsEnabled;
 
     DeploymentPolicy(@Value("${majung.deployment:false}") boolean deployment,
-                     @Value("${majung.creation-key:}") String creationKey,
+                     @Value("${majung.admin-key:${majung.creation-key:}}") String creationKey,
                      @Value("${majung.development-tools:true}") boolean developmentTools,
                      @Value("${majung.retention.enabled:false}") boolean retentionEnabled,
                      @Value("${majung.retention.period:PT24H}") Duration retention,
@@ -22,7 +22,7 @@ class DeploymentPolicy {
             throw new IllegalArgumentException("Retention must be at least one hour");
         }
         if (deployment && (creationKey.length() < 32 || developmentTools || !retentionEnabled || !rateLimitEnabled)) {
-            throw new IllegalArgumentException("Deployment requires a creation key, disabled development tools, retention and rate limiting");
+            throw new IllegalArgumentException("Deployment requires an admin key, disabled development tools, retention and rate limiting");
         }
         this.creationKey = creationKey;
         this.developmentToolsEnabled = developmentTools && creationKey.isEmpty();
@@ -30,12 +30,13 @@ class DeploymentPolicy {
 
     boolean developmentToolsEnabled() { return developmentToolsEnabled; }
 
-    void requireCreationKey(String supplied) {
-        if (creationKey.isEmpty()) return;
+    void requireAdmin(String authorization) {
+        String supplied = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
+        if (creationKey.isEmpty()) throw new ApiException(403, "ADMIN_DISABLED", "관리자 기능이 설정되지 않았습니다.");
         if (supplied == null || supplied.length() != creationKey.length()
                 || !MessageDigest.isEqual(creationKey.getBytes(StandardCharsets.UTF_8),
                 supplied.getBytes(StandardCharsets.UTF_8))) {
-            throw new ApiException(403, "CREATION_RESTRICTED", "이 서버에서는 허용된 경로로만 픽업을 만들 수 있습니다.");
+            throw new ApiException(403, "ADMIN_REQUIRED", "관리자 권한이 필요합니다.");
         }
     }
 }

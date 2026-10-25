@@ -104,9 +104,13 @@ class AccountSecurity {
                     .successHandler((request, response, authentication) -> {
                         OAuth2AuthorizedClientService clients = authorizedClients.getIfAvailable();
                         if (clients != null) clients.removeAuthorizedClient("kakao", authentication.getName());
-                        response.sendRedirect("/");
+                        response.setStatus(302);
+                        response.setHeader("Location", "/account.html");
                     })
-                    .failureHandler((request, response, exception) -> response.sendRedirect("/?login=failed")));
+                    .failureHandler((request, response, exception) -> {
+                        response.setStatus(302);
+                        response.setHeader("Location", "/account.html?login=failed");
+                    }));
         }
         http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/auth/kakao/unlink"));
         // Only the provider webhook uses its server-side credential instead of browser CSRF.
