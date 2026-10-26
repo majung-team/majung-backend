@@ -10,6 +10,8 @@ CREATE TABLE pickup (
     expires_at TIMESTAMP(6) WITH TIME ZONE,
     created_at TIMESTAMP(6) WITH TIME ZONE,
     ended_at TIMESTAMP(6) WITH TIME ZONE,
+    arrived_at TIMESTAMP(6) WITH TIME ZONE,
+    last_vehicle_activity_at TIMESTAMP(6) WITH TIME ZONE,
     status VARCHAR(255),
     place_label VARCHAR(255),
     place_latitude DOUBLE PRECISION NOT NULL,
@@ -112,6 +114,7 @@ CREATE TABLE ride_request (
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     expires_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     queue_order BIGINT,
+    ended_at TIMESTAMP(6) WITH TIME ZONE,
     driver_invitation BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX ride_request_driver ON ride_request(driver_id, created_at);

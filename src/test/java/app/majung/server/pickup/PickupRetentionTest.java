@@ -23,10 +23,31 @@ class PickupRetentionTest {
     @Autowired PickupRepository pickupRepository;
     @Autowired PickupApiTest.MutableClock clock;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired RideRequestRepository requests;
+    @org.junit.jupiter.api.BeforeEach void reset() { requests.deleteAll(); pickupRepository.deleteAll(); clock.reset(); }
+
+    @Test void associatedRequestUsesPickupEndAndNeverDeletesAnActivePickupRequest() {
+        Instant cutoff=clock.instant().minus(Duration.ofDays(7));
+        UUID active=save(null,clock.instant().plusSeconds(3600));
+        UUID recent=save(cutoff.plusSeconds(1),clock.instant());
+        UUID old=save(cutoff,clock.instant());
+        UUID activeRequest=request(active,cutoff.minusSeconds(86400));
+        UUID recentRequest=request(recent,cutoff.minusSeconds(86400));
+        UUID oldRequest=request(old,clock.instant().plusSeconds(86400));
+        assertEquals(1,job.purgeExpiredPickups());
+        assertTrue(requests.existsById(activeRequest)); assertTrue(requests.existsById(recentRequest));
+        assertFalse(requests.existsById(oldRequest)); assertFalse(pickupRepository.existsById(old));
+    }
+    private UUID request(UUID pickupId,Instant expiry) {
+        RideRequest request=new RideRequest(); request.id=UUID.randomUUID(); request.driverId=UUID.randomUUID();
+        request.passengerId=UUID.randomUUID(); request.pickupId=pickupId; request.status="ACTIVE";
+        request.createdAt=clock.instant().minus(Duration.ofDays(8)); request.expiresAt=expiry;
+        requests.saveAndFlush(request); return request.id;
+    }
 
     @Test void deleteOnlyEndedOrExpiredRowsAtRetentionBoundary() {
         clock.reset();
-        Instant cutoff = clock.instant().minus(Duration.ofHours(24));
+        Instant cutoff = clock.instant().minus(Duration.ofDays(7));
         UUID completed = save(cutoff, clock.instant().plusSeconds(1));
         UUID expired = save(null, cutoff);
         UUID cancelled = save(cutoff.minusSeconds(1), clock.instant());

@@ -11,7 +11,7 @@ import java.util.UUID;
 /** One pickup is the transaction boundary. Never serialize this persistence object. */
 @Entity
 class Pickup {
-    enum Status { INVITING, WAITING_APPROVAL, ACTIVE, ARRIVED, COMPLETED, CANCELLED }
+    enum Status { INVITING, WAITING_APPROVAL, ACTIVE, ARRIVED, COMPLETED, CANCELLED, EXPIRED }
     enum Readiness { WAITING, PREPARING, READY }
 
     @Id
@@ -25,6 +25,8 @@ class Pickup {
     Instant expiresAt;
     Instant createdAt;
     Instant endedAt;
+    Instant arrivedAt;
+    Instant lastVehicleActivityAt;
     @Enumerated(EnumType.STRING)
     Status status;
     String placeLabel;
@@ -63,11 +65,34 @@ class Pickup {
     }
 
     boolean isTerminal() {
-        return status == Status.COMPLETED || status == Status.CANCELLED;
+        return status == Status.COMPLETED || status == Status.CANCELLED || status == Status.EXPIRED;
     }
 
     boolean isExpired(Instant now) {
-        return !now.isBefore(expiresAt);
+        return !now.isBefore(expirationTime());
+    }
+
+    Instant expirationTime() {
+        Instant deadline = expiresAt;
+        if (status == Status.ARRIVED && arrivedAt != null) {
+            Instant arrivalLimit = arrivedAt.plusSeconds(1800);
+            if (arrivalLimit.isBefore(deadline)) deadline = arrivalLimit;
+        } else if (status == Status.ACTIVE) {
+            Instant baseline = lastVehicleActivityAt != null ? lastVehicleActivityAt
+                    : vehicleReceivedAt != null ? vehicleReceivedAt : createdAt;
+            Instant inactivityLimit = baseline.plusSeconds(1800);
+            if (inactivityLimit.isBefore(deadline)) deadline = inactivityLimit;
+        }
+        return deadline;
+    }
+
+    boolean expireIfDue(Instant now) {
+        if (isTerminal() || !isExpired(now)) return false;
+        endedAt = expirationTime();
+        status = Status.EXPIRED;
+        inviteHash = null;
+        clearVehicle();
+        return true;
     }
 
     void clearVehicle() {

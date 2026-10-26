@@ -27,7 +27,7 @@ class PickupService {
                   @Value("${majung.pickup-ttl}") Duration pickupTtl,
                   @Value("${majung.vehicle-freshness}") Duration vehicleFreshness) {
         if (inviteTtl.isNegative() || inviteTtl.isZero() || pickupTtl.compareTo(inviteTtl) < 0
-                || vehicleFreshness.isNegative() || vehicleFreshness.isZero()) {
+                || pickupTtl.compareTo(Duration.ofHours(12)) > 0 || vehicleFreshness.isNegative() || vehicleFreshness.isZero()) {
             throw new IllegalArgumentException("Invalid pickup lifetime configuration");
         }
         this.pickupRepository = pickupRepository;
@@ -109,6 +109,7 @@ class PickupService {
             throw error(410, "INVITE_EXPIRED", "참여 요청이 만료됐습니다. 새로 초대해주세요.");
         }
         pickup.status = Pickup.Status.ACTIVE;
+        pickup.lastVehicleActivityAt = clock.instant();
         return toPickupResponse(pickup, true);
     }
 
@@ -158,6 +159,7 @@ class PickupService {
                 && request.sourceTime().isBefore(pickup.vehicleSourceTime))) {
             throw error(409, "STALE_EVENT", "이전 차량 정보로 현재 상태를 덮을 수 없습니다.");
         }
+        if (request.sourceTime().plus(vehicleFreshness).isAfter(now)) pickup.lastVehicleActivityAt = now;
         pickup.vehicleSequence = request.sequence();
         pickup.vehicleLatitude = request.latitude();
         pickup.vehicleLongitude = request.longitude();
@@ -195,6 +197,7 @@ class PickupService {
     PickupApi.Snapshot arrivePickup(UUID id, String auth) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
+        if (pickup.status != Pickup.Status.ARRIVED) pickup.arrivedAt = clock.instant();
         pickup.status = Pickup.Status.ARRIVED;
         return toPickupResponse(pickup, true);
     }
@@ -226,8 +229,10 @@ class PickupService {
     }
 
     private Pickup locked(UUID id) {
-        return pickupRepository.findLockedById(id)
+        Pickup pickup = pickupRepository.findLockedById(id)
                 .orElseThrow(() -> error(404, "PICKUP_NOT_FOUND", "픽업을 찾을 수 없습니다."));
+        pickup.expireIfDue(clock.instant());
+        return pickup;
     }
 
     private Pickup owner(UUID id, String auth) {

@@ -19,6 +19,7 @@ class RideRequest {
     double placeLongitude;
     Instant createdAt;
     Instant expiresAt;
+    Instant endedAt;
     Long queueOrder;
     protected RideRequest() { }
 }

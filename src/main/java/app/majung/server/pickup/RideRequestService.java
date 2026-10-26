@@ -82,7 +82,7 @@ class RideRequestService {
         String state = state(hint);
         if (accept && List.of("QUEUED", "ACTIVE").contains(state) || !accept && state.equals("REJECTED")) return view(hint, false);
         if (!state.equals("INVITED")) throw conflict("응답할 수 없는 초대예요. 목록을 다시 확인해주세요.");
-        if (accept) enqueue(hint); else hint.status = "REJECTED";
+        if (accept) enqueue(hint); else { hint.status = "REJECTED"; hint.endedAt = clock.instant(); }
         return view(hint, false);
     }
     RideRequestApi.View cancelInvitation(String auth, UUID id) {
@@ -90,7 +90,7 @@ class RideRequestService {
         if (!request.driverInvitation) throw notFound();
         if (state(request).equals("CANCELLED")) return view(request, true);
         if (!List.of("INVITED", "QUEUED").contains(state(request))) throw conflict("초대 대기나 픽업 대기 중에만 취소할 수 있어요.");
-        request.status = "CANCELLED";
+        request.status = "CANCELLED"; request.endedAt = clock.instant();
         return view(request, true);
     }
     private UUID connectedPassenger(MemberConnection connection, UUID driver) {
@@ -166,7 +166,7 @@ class RideRequestService {
         UUID driver=deviceDriver(auth); RideRequest request=owned(driver,id);
         if (state(request).equals("REJECTED")) return view(request,true);
         if (!state(request).equals("PENDING")) throw conflict("응답 대기 중인 요청만 거절할 수 있어요.");
-        request.status="REJECTED"; return view(request,true);
+        request.status="REJECTED"; request.endedAt=clock.instant(); return view(request,true);
     }
     RideRequestApi.View cancel(UUID self, UUID id) {
         members.current(self); RideRequest hint=requests.findById(id).orElseThrow(RideRequestService::notFound);
@@ -176,7 +176,7 @@ class RideRequestService {
         if (!open(request)) throw conflict("이미 종료된 요청이에요.");
         // Active cancellation remains a driver's explicit action; never lock a pickup before a vehicle row.
         if (state(request).equals("ACTIVE")) throw conflict("진행 중인 픽업의 취소는 운전자에게 요청해주세요.");
-        request.status="CANCELLED"; return view(request,false);
+        request.status="CANCELLED"; request.endedAt=clock.instant(); return view(request,false);
     }
     RideRequestApi.Started start(String auth, UUID id) {
         RegisteredVehicle vehicle=registration.requireActive(auth);
