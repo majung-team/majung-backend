@@ -32,6 +32,7 @@ class PickupApi {
     record JoinRequest(@NotBlank @Size(min = 43, max = 43) String inviteToken,
                        @Size(max = 12) String displayName) { }
     record ReadinessRequest(@NotNull Pickup.Readiness readiness, @Positive long sequence) { }
+    record ReadinessReceipt(@NotNull UUID participantId, @Positive long sequence) { }
     record VehicleInvalidation(@Positive long sequence) { }
     record VehicleRequest(@NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
                           @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
@@ -44,7 +45,7 @@ class PickupApi {
     record ArrivalPushState(boolean subscribed) { }
     record Joined(UUID participantId, String participantToken, String status) { }
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
-                       long readinessSequence) { }
+                       long readinessSequence, long readinessReceivedSequence) { }
     record Snapshot(UUID pickupId, String status, Place place, Participant participant,
                     Instant inviteExpiresAt, Instant expiresAt, Instant endedAt) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
@@ -108,6 +109,13 @@ class PickupApi {
     Snapshot readiness(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth,
                        @Valid @RequestBody ReadinessRequest request) {
         return pickupService.updateReadiness(id, auth, request);
+    }
+
+    @PutMapping(value = "/{id}/readiness-receipt", consumes = "application/json")
+    Snapshot receiveReadiness(@PathVariable UUID id,
+                             @RequestHeader(value = "Authorization", required = false) String auth,
+                             @Valid @RequestBody ReadinessReceipt request) {
+        return pickupService.receiveReadiness(id, auth, request);
     }
 
     @PutMapping(value = "/{id}/vehicle-state", consumes = "application/json")

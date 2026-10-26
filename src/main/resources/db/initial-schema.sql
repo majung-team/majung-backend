@@ -21,6 +21,7 @@ CREATE TABLE pickup (
     participant_hash VARCHAR(255),
     readiness VARCHAR(255),
     readiness_sequence BIGINT NOT NULL,
+    readiness_received_sequence BIGINT NOT NULL DEFAULT 0,
     vehicle_sequence BIGINT NOT NULL,
     vehicle_latitude DOUBLE PRECISION,
     vehicle_longitude DOUBLE PRECISION,

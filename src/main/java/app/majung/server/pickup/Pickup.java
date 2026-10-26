@@ -38,6 +38,7 @@ class Pickup {
     @Enumerated(EnumType.STRING)
     Readiness readiness;
     long readinessSequence;
+    long readinessReceivedSequence;
     long vehicleSequence;
     Double vehicleLatitude;
     Double vehicleLongitude;

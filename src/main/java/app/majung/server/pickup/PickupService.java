@@ -120,6 +120,7 @@ class PickupService {
         pickup.participantName = null;
         pickup.readiness = Pickup.Readiness.WAITING;
         pickup.readinessSequence = 0;
+        pickup.readinessReceivedSequence = 0;
         pickup.status = Pickup.Status.INVITING;
         pickup.arrivedAt = null;
         pickup.lastVehicleActivityAt = null;
@@ -176,6 +177,20 @@ class PickupService {
         pickup.readiness = request.readiness();
         pickup.readinessSequence = request.sequence();
         return toPickupResponse(pickup, false);
+    }
+
+    PickupApi.Snapshot receiveReadiness(UUID id, String auth, PickupApi.ReadinessReceipt request) {
+        Pickup pickup = owner(id, auth);
+        requireSharing(pickup);
+        // Participant identity prevents a delayed receipt from confirming a replacement passenger's sequence.
+        if (!Objects.equals(pickup.participantId, request.participantId())) {
+            throw error(409, "PARTICIPANT_CHANGED", "탑승자가 변경됐습니다. 상태를 다시 확인해주세요.");
+        }
+        if (request.sequence() > pickup.readinessSequence) {
+            throw error(409, "READINESS_NOT_FOUND", "준비 상태를 다시 확인해주세요.");
+        }
+        pickup.readinessReceivedSequence = Math.max(pickup.readinessReceivedSequence, request.sequence());
+        return toPickupResponse(pickup, true);
     }
 
     PickupApi.VehicleState updateVehicle(UUID id, String auth, PickupApi.VehicleRequest request) {
@@ -339,7 +354,7 @@ class PickupService {
                 ? new PickupApi.Place(pickup.placeLabel, pickup.placeLatitude, pickup.placeLongitude) : null;
         PickupApi.Participant participant = pickup.participantId == null ? null
                 : new PickupApi.Participant(pickup.participantId, pickup.participantName,
-                pickup.readiness, pickup.readinessSequence);
+                pickup.readiness, pickup.readinessSequence, pickup.readinessReceivedSequence);
         String status = expired ? "EXPIRED" : inviteExpired ? "INVITE_EXPIRED" : pickup.status.name();
         return new PickupApi.Snapshot(pickup.id, status, place, participant,
                 pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt);
