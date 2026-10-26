@@ -13,6 +13,7 @@ import java.util.UUID;
 class Pickup {
     enum Status { INVITING, WAITING_APPROVAL, ACTIVE, ARRIVED, COMPLETED, CANCELLED, EXPIRED }
     enum Readiness { WAITING, PREPARING, READY }
+    enum Proposer { DRIVER, PASSENGER }
 
     @Id
     UUID id;
@@ -45,6 +46,13 @@ class Pickup {
     Long durationSeconds;
     Instant vehicleSourceTime;
     Instant vehicleReceivedAt;
+    // A suggested place stays beside the confirmed place until the driver acts on it.
+    @Enumerated(EnumType.STRING)
+    Proposer proposalBy;
+    String proposalLabel;
+    Double proposalLatitude;
+    Double proposalLongitude;
+    Instant proposalAt;
 
     protected Pickup() { }
 
@@ -94,6 +102,14 @@ class Pickup {
         inviteHash = null;
         clearVehicle();
         return true;
+    }
+
+    void clearProposal() {
+        proposalBy = null;
+        proposalLabel = null;
+        proposalLatitude = null;
+        proposalLongitude = null;
+        proposalAt = null;
     }
 
     void clearVehicle() {

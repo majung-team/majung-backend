@@ -211,6 +211,12 @@ class RideRequestService {
     PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID self,UUID id) {
         return pickupService.unsubscribeArrivalPushForAccount(passengerActive(self,id).pickupId);
     }
+    PickupApi.Snapshot proposePlace(UUID self,UUID id,PickupApi.Place place) {
+        return pickupService.proposePlaceForAccount(passengerActive(self,id).pickupId,place);
+    }
+    PickupApi.Snapshot withdrawPlaceProposal(UUID self,UUID id) {
+        return pickupService.withdrawPlaceProposalForAccount(passengerActive(self,id).pickupId);
+    }
     PickupApi.Snapshot readiness(UUID self,UUID id,PickupApi.ReadinessRequest input) {
         RideRequest request=passengerActive(self,id);
         return pickupService.readinessForAccount(request.pickupId,input);
