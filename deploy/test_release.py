@@ -40,7 +40,7 @@ class ReleaseTest(unittest.TestCase):
             self.assertTrue((pathlib.Path(temporary) / 'map.js').is_file())
 
     def test_push_files_are_allowed_web_files(self):
-        for name in ['push.js', 'sw.js', 'manifest.webmanifest']:
+        for name in ['push.js', 'proposal.js', 'sw.js', 'manifest.webmanifest']:
             with tempfile.TemporaryDirectory() as temporary:
                 release.unpack_web(web_artifact(tarfile.TarInfo(name)), pathlib.Path(temporary))
                 self.assertTrue((pathlib.Path(temporary) / name).is_file())

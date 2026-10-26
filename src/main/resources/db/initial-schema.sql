@@ -27,7 +27,12 @@ CREATE TABLE pickup (
     vehicle_longitude DOUBLE PRECISION,
     duration_seconds BIGINT,
     vehicle_source_time TIMESTAMP(6) WITH TIME ZONE,
-    vehicle_received_at TIMESTAMP(6) WITH TIME ZONE
+    vehicle_received_at TIMESTAMP(6) WITH TIME ZONE,
+    proposal_by VARCHAR(255),
+    proposal_label VARCHAR(255),
+    proposal_latitude DOUBLE PRECISION,
+    proposal_longitude DOUBLE PRECISION,
+    proposal_at TIMESTAMP(6) WITH TIME ZONE
 );
 CREATE INDEX pickup_retention_ended ON pickup (ended_at);
 CREATE INDEX pickup_retention_expires ON pickup (expires_at);
