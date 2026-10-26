@@ -20,9 +20,10 @@ class PickupLifecycleTest {
     @Autowired PickupService service;
     @Autowired PickupRepository pickups;
     @Autowired PickupExpirationJob job;
+    @Autowired ArrivalPushRepository pushSubscriptions;
     @Autowired PickupApiTest.MutableClock clock;
     record Session(UUID id, String owner, String guest) { }
-    @BeforeEach void reset() { pickups.deleteAll(); clock.reset(); }
+    @BeforeEach void reset() { pushSubscriptions.deleteAll(); pickups.deleteAll(); clock.reset(); }
     Session active() {
         var created = service.createPickup(new PickupApi.Place("시험 장소",37.0,127.0),null);
         var guest = service.joinPickup(created.pickupId(),new PickupApi.JoinRequest(created.inviteToken(),"시험 탑승자"));
@@ -31,6 +32,27 @@ class PickupLifecycleTest {
     }
     void vehicle(Session session, long sequence) {
         service.updateVehicle(session.id,session.owner,new PickupApi.VehicleRequest(37.0,127.0,300L,clock.instant(),sequence));
+    }
+    @Test void automaticJoinStartsItsOwnInactivityWindowWithoutApproval() {
+        var created = service.createPickup(new PickupApi.Place("시험 장소",37.0,127.0),null);
+        clock.advance(Duration.ofMinutes(14));
+        service.joinPickup(created.pickupId(),new PickupApi.JoinRequest(created.inviteToken(),null));
+        clock.advance(Duration.ofMinutes(20));
+        assertEquals("ACTIVE",service.getPickup(created.pickupId(),"Bearer "+created.driverToken()).status());
+        clock.advance(Duration.ofMinutes(10));
+        assertEquals("EXPIRED",service.getPickup(created.pickupId(),"Bearer "+created.driverToken()).status());
+    }
+    @Test void readAndScheduledExpirationBothRemoveThePreviousPushSubscription() {
+        Session readSession=active();
+        pushSubscriptions.saveAndFlush(new ArrivalPush(readSession.id,"https://fcm.googleapis.com/test-only-read",clock.instant()));
+        clock.advance(Duration.ofMinutes(30));
+        assertEquals("EXPIRED",service.getPickup(readSession.id,readSession.owner).status());
+        assertFalse(pushSubscriptions.existsById(readSession.id));
+        Session scheduledSession=active();
+        pushSubscriptions.saveAndFlush(new ArrivalPush(scheduledSession.id,"https://fcm.googleapis.com/test-only-job",clock.instant()));
+        clock.advance(Duration.ofMinutes(30));
+        assertEquals(1,job.expireDuePickups());
+        assertFalse(pushSubscriptions.existsById(scheduledSession.id));
     }
     @Test void inactivityExpiresAtBoundaryAndPollingCannotKeepItAlive() {
         Session session=active(); var started=clock.instant(); vehicle(session,1);
