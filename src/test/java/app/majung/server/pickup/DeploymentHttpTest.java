@@ -45,7 +45,7 @@ class DeploymentHttpTest {
         assertEquals(201, call("POST", "/api/v1/pickups", null, register(), PLACE, null).statusCode());
         HttpResponse<String> configuration = call("GET", "/api/v1/config", null, null, null, null);
         assertEquals(200, configuration.statusCode());
-        assertEquals("{\"developmentToolsEnabled\":false,\"kakaoMapJavaScriptKey\":\"test-map-key\"}", configuration.body());
+        assertEquals("{\"developmentToolsEnabled\":false,\"kakaoMapJavaScriptKey\":\"test-map-key\",\"webPushPublicKey\":null}", configuration.body());
         assertFalse(configuration.body().contains(TEST_KEY));
     }
 

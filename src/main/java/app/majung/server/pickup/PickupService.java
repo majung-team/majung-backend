@@ -15,6 +15,7 @@ class PickupService {
     private static final String DEFAULT_PARTICIPANT_NAME = "탑승자";
     private final PickupRepository pickupRepository;
     private final RideRequestRepository rideRequestRepository;
+    private final ArrivalPushService arrivalPush;
     private final TokenService tokenService;
     private final Clock clock;
     private final VehicleRegistrationService vehicleRegistrationService;
@@ -25,6 +26,7 @@ class PickupService {
     private final Duration vehicleLastKnown;
 
     PickupService(PickupRepository pickupRepository, RideRequestRepository rideRequestRepository,
+                  ArrivalPushService arrivalPush,
                   TokenService tokenService, Clock clock,
                   VehicleRegistrationService vehicleRegistrationService, DeploymentPolicy deploymentPolicy,
                   @Value("${majung.invite-ttl}") Duration inviteTtl,
@@ -38,6 +40,7 @@ class PickupService {
         }
         this.pickupRepository = pickupRepository;
         this.rideRequestRepository = rideRequestRepository;
+        this.arrivalPush = arrivalPush;
         this.tokenService = tokenService;
         this.clock = clock;
         this.vehicleRegistrationService = vehicleRegistrationService;
@@ -117,6 +120,8 @@ class PickupService {
         pickup.readiness = Pickup.Readiness.WAITING;
         pickup.readinessSequence = 0;
         pickup.status = Pickup.Status.INVITING;
+        // The disconnected passenger's browser must not be notified about the next passenger's pickup.
+        arrivalPush.remove(pickup.id);
         // The previous passenger's view of the car must not carry over; the sequence stays monotonic.
         pickup.clearVehicle();
         return new PickupApi.Invitation(inviteToken, pickup.inviteExpiresAt);
@@ -193,6 +198,7 @@ class PickupService {
         pickup.durationSeconds = request.durationSeconds();
         pickup.vehicleSourceTime = request.sourceTime();
         pickup.vehicleReceivedAt = now;
+        arrivalPush.vehicleUpdated(pickup.id, pickup.status, pickup.durationSeconds);
         return toVehicleResponse(pickup);
     }
 
@@ -241,7 +247,40 @@ class PickupService {
         pickup.endedAt = clock.instant();
         pickup.inviteHash = null;
         pickup.clearVehicle();
+        arrivalPush.remove(pickup.id);
         return toPickupResponse(pickup, true);
+    }
+
+    PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, String endpoint) {
+        Pickup pickup = locked(id);
+        if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 신청할 수 있습니다.");
+        }
+        requireSharing(pickup);
+        arrivalPush.subscribe(pickup.id, endpoint);
+        return new PickupApi.ArrivalPushState(true);
+    }
+
+    PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID id, String auth) {
+        Pickup pickup = locked(id);
+        if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 바꿀 수 있습니다.");
+        }
+        arrivalPush.remove(pickup.id);
+        return new PickupApi.ArrivalPushState(false);
+    }
+
+    // Account-side variants: RideRequestService has already checked the signed-in passenger and active request.
+    PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, String endpoint) {
+        Pickup pickup = locked(id);
+        requireSharing(pickup);
+        arrivalPush.subscribe(pickup.id, endpoint);
+        return new PickupApi.ArrivalPushState(true);
+    }
+
+    PickupApi.ArrivalPushState unsubscribeArrivalPushForAccount(UUID id) {
+        arrivalPush.remove(id);
+        return new PickupApi.ArrivalPushState(false);
     }
 
     // Called only after RideRequestService has checked the signed-in passenger and active request.
