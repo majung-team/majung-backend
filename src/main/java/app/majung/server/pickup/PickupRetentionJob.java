@@ -16,13 +16,15 @@ class PickupRetentionJob {
     private static final Logger log = LoggerFactory.getLogger(PickupRetentionJob.class);
     private final PickupRepository pickupRepository;
     private final RideRequestRepository rideRequests;
+    private final ArrivalPushService arrivalPush;
     private final Clock clock;
     private final Duration retention;
 
-    PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, Clock clock,
+    PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, ArrivalPushService arrivalPush, Clock clock,
                        @Value("${majung.retention.period:PT24H}") Duration retention) {
         this.pickupRepository = pickupRepository;
         this.rideRequests = rideRequests;
+        this.arrivalPush = arrivalPush;
         this.clock = clock;
         this.retention = retention;
     }
@@ -32,6 +34,7 @@ class PickupRetentionJob {
                initialDelayString = "${majung.retention.cleanup-interval-ms:300000}")
     public int purgeExpiredPickups() {
         rideRequests.deleteRetainedBefore(clock.instant().minus(retention));
+        arrivalPush.removeCreatedBefore(clock.instant().minus(retention));
         int deleted = pickupRepository.deleteRetainedBefore(clock.instant().minus(retention));
         if (deleted > 0) log.info("Retained pickups removed: count={}", deleted);
         return deleted;

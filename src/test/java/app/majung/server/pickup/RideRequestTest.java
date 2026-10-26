@@ -28,7 +28,7 @@ import org.springframework.web.context.WebApplicationContext;
     "majung.rate-limit.enabled=false", "majung.login.unlink-cleanup-enabled=false",
     "majung.login.kakao-admin-key=fixture-admin-key", "majung.login.kakao-app-id=fixture-app-id"
 })
-@Import(PickupApiTest.TimeConfiguration.class)
+@Import({PickupApiTest.TimeConfiguration.class, ArrivalPushTest.FakePushConfiguration.class})
 class RideRequestTest {
     static final AtomicLong subjects=new AtomicLong(900000);
     @Autowired RideRequestService service;
@@ -108,6 +108,25 @@ class RideRequestTest {
         var positions=List.of(service.passenger(a.id).get(0).peopleAhead(),service.passenger(b.id).get(0).peopleAhead()).stream().sorted().toList();
         assertEquals(List.of(0,1),positions);
     }
+    @Autowired ArrivalPushTest.FakePush fakePush;
+    @Autowired ArrivalPushRepository arrivalPushes;
+
+    @Test void activeRequestPassengerCanSubscribeToTheArrivalNoticeAndOthersCannot() {
+        fakePush.reset();
+        Driver driver=driver(); Member a=member(); Member b=member();
+        var request=service.submit(a.id,input(driver));
+        var queued=service.submit(b.id,input(driver));
+        service.accept(driver.auth,request.requestId()); service.accept(driver.auth,queued.requestId());
+        assertEquals(403,assertThrows(ApiException.class,()->service.subscribeArrivalPush(a.id,request.requestId(),ArrivalPushTest.ENDPOINT)).status);
+        var active=service.start(driver.auth,request.requestId());
+        assertEquals(404,assertThrows(ApiException.class,()->service.subscribeArrivalPush(b.id,request.requestId(),ArrivalPushTest.ENDPOINT)).status);
+        assertEquals(403,assertThrows(ApiException.class,()->service.subscribeArrivalPush(b.id,queued.requestId(),ArrivalPushTest.ENDPOINT)).status);
+        assertTrue(service.subscribeArrivalPush(a.id,request.requestId(),ArrivalPushTest.ENDPOINT).subscribed());
+        assertTrue(arrivalPushes.findById(active.pickupId()).isPresent());
+        assertFalse(service.unsubscribeArrivalPush(a.id,request.requestId()).subscribed());
+        assertTrue(arrivalPushes.findById(active.pickupId()).isEmpty());
+    }
+
     @Test void passengerOfARequestedPickupCannotBeDisconnectedThroughTheInvitationApi() {
         Driver driver=driver(); Member a=member();
         var request=service.submit(a.id,input(driver)); service.accept(driver.auth,request.requestId());

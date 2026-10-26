@@ -40,6 +40,8 @@ class PickupApi {
     record Created(UUID pickupId, String driverToken, String inviteToken,
                    Instant inviteExpiresAt, Instant expiresAt) { }
     record Invitation(String inviteToken, Instant expiresAt) { }
+    record ArrivalPushRequest(@NotBlank @Size(max = 1024) String endpoint) { }
+    record ArrivalPushState(boolean subscribed) { }
     record Joined(UUID participantId, String participantToken, String status) { }
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
                        long readinessSequence) { }
@@ -73,6 +75,17 @@ class PickupApi {
     @PostMapping("/{id}/invitations")
     Invitation rotate(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
         return pickupService.rotateInvitation(id, auth);
+    }
+
+    @PutMapping(value = "/{id}/arrival-push", consumes = "application/json")
+    ArrivalPushState subscribeArrivalPush(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth,
+                                          @Valid @RequestBody ArrivalPushRequest request) {
+        return pickupService.subscribeArrivalPush(id, auth, request.endpoint());
+    }
+
+    @DeleteMapping("/{id}/arrival-push")
+    ArrivalPushState unsubscribeArrivalPush(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
+        return pickupService.unsubscribeArrivalPush(id, auth);
     }
 
     @DeleteMapping("/{id}/participant")
