@@ -13,6 +13,7 @@ class RideRequest {
     UUID vehicleId;
     UUID pickupId;
     String status;
+    boolean driverInvitation;
     String placeLabel;
     double placeLatitude;
     double placeLongitude;

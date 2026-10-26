@@ -105,6 +105,11 @@ class AccountBrowserFixtureTest {
         vehicleAccounts.claim(driver.id,new VehicleAccountApi.Claim(qr.challengeId(),qr.code())); vehicleAccounts.confirm(auth,qr.challengeId());
         var firstRequest=rides.submit(first.id,new RideRequestApi.Submit(driver.id,new PickupApi.Place("A만 볼 수 있는 장소",37.1,127.1),java.util.UUID.randomUUID()));
         rides.accept(auth,firstRequest.requestId()); var active=rides.start(auth,firstRequest.requestId());
+        if ("true".equals(System.getenv("MAJUNG_INVITATION_FIXTURE"))) {
+            var connection = members.request(driver.id, second.id);
+            members.change(second.id, connection.connectionId(), "accept");
+            rides.invite(auth, new RideRequestApi.Invite(connection.connectionId(), new PickupApi.Place("초대 시험 장소",37.3,127.3),java.util.UUID.randomUUID()));
+        }
         Path capability=Path.of(System.getProperty("java.io.tmpdir"),"majung-browser-vehicle.json");
         Files.writeString(capability,"{\"vehicleId\":\""+vehicle.vehicleId()+"\",\"vehicleToken\":\""+vehicle.vehicleToken()+"\",\"pickupId\":\""+active.pickupId()+"\",\"driverToken\":\""+active.driverToken()+"\"}");
         Files.setPosixFilePermissions(capability,java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
