@@ -106,6 +106,31 @@ class ArrivalPushTest {
     }
 
     @Test
+    void confirmedPlaceRearmsNoticeButOldPlaceTelemetryCannotTriggerIt() throws Exception {
+        Pickup pickup = connected();
+        subscribe(pickup, pickup.guest, ENDPOINT);
+        vehicle(pickup, 1, 100);
+        await(() -> push.sent.size() == 1);
+        Map<String, Object> place = Map.of("label", "새 시험 장소", "latitude", 37.002, "longitude", 127.003);
+        JsonNode proposal = call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", place)).body();
+        assertEquals(200, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                Map.of("proposalId", proposal.path("placeProposal").path("proposalId").asText(),
+                        "expectedPlaceVersion", 1, "place", place, "durationSeconds", 100,
+                        "sourceTime", clock.instant().toString())).status());
+        assertEquals(409, vehicle(pickup, 2, 90).status());
+        assertEquals(1, push.sent.size());
+        assertEquals(200, call("PUT", pickup.path() + "/vehicle-state", pickup.owner,
+                Map.of("latitude", 37.01, "longitude", 127.01, "durationSeconds", 90,
+                        "sourceTime", clock.instant().toString(), "sequence", 2, "placeVersion", 2)).status());
+        await(() -> push.sent.size() == 2);
+        assertEquals(200, call("PUT", pickup.path() + "/vehicle-state", pickup.owner,
+                Map.of("latitude", 37.01, "longitude", 127.01, "durationSeconds", 80,
+                        "sourceTime", clock.instant().toString(), "sequence", 3, "placeVersion", 2)).status());
+        Thread.sleep(300);
+        assertEquals(2, push.sent.size());
+    }
+
+    @Test
     void doesNotNotifyWithoutASubscriptionOrAfterUnsubscribing() throws Exception {
         Pickup pickup = connected();
         assertEquals(200, vehicle(pickup, 1, 100).status());

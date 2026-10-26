@@ -180,6 +180,42 @@ class PickupService {
         return toPickupResponse(pickup, false);
     }
 
+    private void requirePlaceVersion(Pickup pickup, Long version) {
+        if (version == null && pickup.placeVersion == 1) return;
+        if (version == null || version != pickup.placeVersion) {
+            throw error(409, "PLACE_CHANGED", "만날 장소가 바뀌었습니다. 경로와 상태를 다시 확인해주세요.");
+        }
+    }
+
+    PickupApi.Snapshot confirmPlace(UUID id, String auth, PickupApi.PlaceConfirmation request) {
+        Pickup pickup = owner(id, auth);
+        requireSharing(pickup);
+        if (Objects.equals(request.proposalId(), pickup.confirmedProposalId)
+                && request.expectedPlaceVersion() == pickup.placeVersion - 1) return toPickupResponse(pickup, true);
+        if (pickup.status != Pickup.Status.ACTIVE) throw error(409, "INVALID_STATE", "도착 전의 픽업에서만 장소를 바꿀 수 있습니다.");
+        requirePlaceVersion(pickup, request.expectedPlaceVersion());
+        if (!Objects.equals(request.proposalId(), pickup.proposalId) || pickup.proposalBy == null) {
+            throw error(409, "PROPOSAL_CHANGED", "장소 제안이 바뀌었습니다. 새 제안을 확인해주세요.");
+        }
+        if (Math.abs(request.place().latitude() - pickup.proposalLatitude) > 0.000001
+                || Math.abs(request.place().longitude() - pickup.proposalLongitude) > 0.000001) {
+            throw error(409, "ROUTE_UNVERIFIED", "내비 경로의 장소가 제안과 일치하지 않습니다.");
+        }
+        Instant now = clock.instant();
+        if (request.sourceTime().isAfter(now.plusSeconds(5)) || request.sourceTime().isBefore(now.minusSeconds(10))) {
+            throw error(409, "ROUTE_UNVERIFIED", "내비에서 새 경로와 도착 시간을 다시 확인해주세요.");
+        }
+        pickup.placeLabel = pickup.proposalLabel;
+        pickup.placeLatitude = pickup.proposalLatitude;
+        pickup.placeLongitude = pickup.proposalLongitude;
+        pickup.confirmedProposalId = pickup.proposalId;
+        pickup.placeVersion++;
+        pickup.clearProposal();
+        pickup.clearVehicle();
+        arrivalPush.rearm(pickup.id, pickup.placeVersion);
+        return toPickupResponse(pickup, true);
+    }
+
     PickupApi.Snapshot receiveReadiness(UUID id, String auth, PickupApi.ReadinessReceipt request) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
@@ -197,8 +233,9 @@ class PickupService {
     PickupApi.VehicleState updateVehicle(UUID id, String auth, PickupApi.VehicleRequest request) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
+        requirePlaceVersion(pickup, request.placeVersion());
         Instant now = clock.instant();
-        if (request.sourceTime().isAfter(now)) {
+        if (request.sourceTime().isAfter(now.plusSeconds(5))) {
             throw error(400, "FUTURE_SOURCE_TIME", "미래 시각의 차량 정보는 반영할 수 없습니다.");
         }
         if (request.sequence() == pickup.vehicleSequence
@@ -219,13 +256,18 @@ class PickupService {
         pickup.durationSeconds = request.durationSeconds();
         pickup.vehicleSourceTime = request.sourceTime();
         pickup.vehicleReceivedAt = now;
-        arrivalPush.vehicleUpdated(pickup.id, pickup.status, pickup.durationSeconds);
+        arrivalPush.vehicleUpdated(pickup.id, pickup.status, pickup.durationSeconds, pickup.placeVersion);
         return toVehicleResponse(pickup);
     }
 
     PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence) {
+        return invalidateVehicle(id, auth, sequence, null);
+    }
+
+    PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence, Long placeVersion) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
+        requirePlaceVersion(pickup, placeVersion);
         if (sequence == pickup.vehicleSequence && pickup.vehicleSourceTime == null) {
             return toVehicleResponse(pickup);
         }
@@ -248,9 +290,12 @@ class PickupService {
         return toVehicleResponse(pickup);
     }
 
-    PickupApi.Snapshot arrivePickup(UUID id, String auth) {
+    PickupApi.Snapshot arrivePickup(UUID id, String auth) { return arrivePickup(id, auth, null); }
+
+    PickupApi.Snapshot arrivePickup(UUID id, String auth, Long placeVersion) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
+        requirePlaceVersion(pickup, placeVersion);
         if (pickup.status != Pickup.Status.ARRIVED) pickup.arrivedAt = clock.instant();
         pickup.status = Pickup.Status.ARRIVED;
         return toPickupResponse(pickup, true);
@@ -311,6 +356,7 @@ class PickupService {
                 && Math.abs(place.longitude() - pickup.placeLongitude) < 0.00001) {
             throw error(409, "SAME_PLACE", "지금 정해진 장소와 같은 곳입니다.");
         }
+        pickup.proposalId = UUID.randomUUID();
         pickup.proposalBy = by;
         pickup.proposalLabel = place.label().strip();
         pickup.proposalLatitude = place.latitude();
@@ -335,7 +381,7 @@ class PickupService {
             throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 신청할 수 있습니다.");
         }
         requireSharing(pickup);
-        arrivalPush.subscribe(pickup.id, endpoint);
+        arrivalPush.subscribe(pickup.id, endpoint, pickup.placeVersion);
         return new PickupApi.ArrivalPushState(true);
     }
 
@@ -352,7 +398,7 @@ class PickupService {
     PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, String endpoint) {
         Pickup pickup = locked(id);
         requireSharing(pickup);
-        arrivalPush.subscribe(pickup.id, endpoint);
+        arrivalPush.subscribe(pickup.id, endpoint, pickup.placeVersion);
         return new PickupApi.ArrivalPushState(true);
     }
 
@@ -411,18 +457,18 @@ class PickupService {
                 ? new PickupApi.Place(pickup.placeLabel, pickup.placeLatitude, pickup.placeLongitude) : null;
         PickupApi.PlaceProposal proposal = visible && pickup.proposalBy != null
                 ? new PickupApi.PlaceProposal(new PickupApi.Place(pickup.proposalLabel, pickup.proposalLatitude,
-                pickup.proposalLongitude), pickup.proposalBy, pickup.proposalAt) : null;
+                pickup.proposalLongitude), pickup.proposalBy, pickup.proposalAt, pickup.proposalId) : null;
         PickupApi.Participant participant = pickup.participantId == null ? null
                 : new PickupApi.Participant(pickup.participantId, pickup.participantName,
                 pickup.readiness, pickup.readinessSequence, pickup.readinessReceivedSequence);
         String status = expired ? "EXPIRED" : inviteExpired ? "INVITE_EXPIRED" : pickup.status.name();
         return new PickupApi.Snapshot(pickup.id, status, place, proposal, participant,
-                pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt);
+                pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt, pickup.placeVersion);
     }
 
     private PickupApi.VehicleState toVehicleResponse(Pickup pickup) {
         if (pickup.vehicleSourceTime == null) {
-            return new PickupApi.VehicleState("WAITING", null, null, null, null, null, pickup.vehicleSequence, 0, null);
+            return new PickupApi.VehicleState("WAITING", null, null, null, null, null, pickup.vehicleSequence, 0, null, pickup.placeVersion);
         }
         // Age uses the older of the SDK time and the server receipt, matching the freshness check.
         Instant observedAt = pickup.vehicleSourceTime.isBefore(pickup.vehicleReceivedAt)
@@ -436,7 +482,7 @@ class PickupService {
         return new PickupApi.VehicleState(fresh ? "FRESH" : "STALE",
                 lastKnown ? pickup.vehicleLatitude : null, lastKnown ? pickup.vehicleLongitude : null,
                 lastKnown ? pickup.durationSeconds : null, pickup.vehicleSourceTime,
-                pickup.vehicleReceivedAt, pickup.vehicleSequence, validForMillis, age.toMillis());
+                pickup.vehicleReceivedAt, pickup.vehicleSequence, validForMillis, age.toMillis(), pickup.placeVersion);
     }
 
     private ApiException error(int status, String code, String message) {

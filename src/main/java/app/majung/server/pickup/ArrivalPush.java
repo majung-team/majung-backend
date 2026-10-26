@@ -10,6 +10,7 @@ import java.util.UUID;
 class ArrivalPush {
     @Id
     UUID pickupId;
+    long placeVersion = 1;
     String endpoint;
     Instant createdAt;
     Instant notifiedAt;

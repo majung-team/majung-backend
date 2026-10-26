@@ -258,7 +258,7 @@ class PickupApiTest {
         assertTrue(lost.body().path("durationSeconds").isNull());
         assertFalse(lost.body().path("receivedAt").isNull());
         assertError(vehicle(session, 3, 200, source.minusSeconds(1)), 409, "STALE_EVENT");
-        assertError(vehicle(session, 3, 200, clock.instant().plusSeconds(1)), 400, "FUTURE_SOURCE_TIME");
+        assertError(vehicle(session, 3, 200, clock.instant().plusSeconds(6)), 400, "FUTURE_SOURCE_TIME");
         assertEquals("FRESH", vehicle(session, 3, 200, clock.instant()).body().path("freshness").asText());
     }
 

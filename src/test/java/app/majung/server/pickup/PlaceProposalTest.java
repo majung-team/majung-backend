@@ -119,6 +119,75 @@ class PlaceProposalTest {
         assertEquals(410, call("PUT", ended.path() + "/place-proposal", ended.owner, Map.of("place", OTHER)).status());
     }
 
+    @Test void confirmedPlaceRejectsOldTelemetryAndDuplicateConfirmationIsSafe() throws Exception {
+        Pickup pickup = active();
+        JsonNode proposal = call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER)).body();
+        Map<String, Object> confirmation = confirmation(proposal, OTHER, clock.instant().toString());
+        assertEquals(403, call("PUT", pickup.path() + "/place-confirmation", pickup.guest, confirmation).status());
+        assertEquals(200, call("PUT", pickup.path() + "/vehicle-state", pickup.owner, telemetry(1, 1)).status());
+        Response confirmed = call("PUT", pickup.path() + "/place-confirmation", pickup.owner, confirmation);
+        assertEquals(200, confirmed.status());
+        assertEquals(2, confirmed.body().path("placeVersion").asInt());
+        assertEquals("정문 앞", confirmed.body().path("place").path("label").asText());
+        assertTrue(confirmed.body().path("placeProposal").isNull());
+        assertEquals(200, call("PUT", pickup.path() + "/place-confirmation", pickup.owner, confirmation).status());
+        assertEquals(2, get(pickup, pickup.owner).path("placeVersion").asInt());
+        assertEquals(409, call("PUT", pickup.path() + "/vehicle-state", pickup.owner, telemetry(2, 1)).status());
+        assertEquals(409, call("DELETE", pickup.path() + "/vehicle-state", pickup.owner,
+                Map.of("sequence", 3, "placeVersion", 1)).status());
+        assertEquals(409, call("POST", pickup.path() + "/arrival", pickup.owner, null).status());
+        assertEquals(200, call("PUT", pickup.path() + "/vehicle-state", pickup.owner, telemetry(2, 2)).status());
+        assertEquals(200, call("POST", pickup.path() + "/arrival", pickup.owner, Map.of("placeVersion", 2)).status());
+    }
+
+    @Test void changedProposalOrUnverifiedRouteCannotChangeTheConfirmedPlace() throws Exception {
+        Pickup pickup = active();
+        JsonNode first = call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER)).body();
+        assertEquals(409, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                confirmation(first, PLACE, clock.instant().toString())).status());
+        assertEquals(409, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                confirmation(first, OTHER, clock.instant().minusSeconds(11).toString())).status());
+        assertEquals(409, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                confirmation(first, OTHER, clock.instant().plusSeconds(6).toString())).status());
+        call("DELETE", pickup.path() + "/place-proposal", pickup.guest, null);
+        JsonNode second = call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER)).body();
+        assertEquals(409, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                confirmation(first, OTHER, clock.instant().toString())).status());
+        assertEquals("예시 장소", get(pickup, pickup.owner).path("place").path("label").asText());
+        assertEquals(200, call("PUT", pickup.path() + "/place-confirmation", pickup.owner,
+                confirmation(second, OTHER, clock.instant().toString())).status());
+    }
+
+    @Test void smallClockSkewDoesNotExtendVehicleFreshnessPastServerReceipt() throws Exception {
+        Pickup pickup = active();
+        Response updated = call("PUT", pickup.path() + "/vehicle-state", pickup.owner,
+                Map.of("latitude", 37.01, "longitude", 127.01, "durationSeconds", 120,
+                        "sourceTime", clock.instant().plusSeconds(4).toString(), "sequence", 1, "placeVersion", 1));
+        assertEquals(200, updated.status());
+        assertTrue(updated.body().path("validForMillis").asLong() <= 30000);
+        clock.advance(Duration.ofSeconds(31));
+        JsonNode stale = call("GET", pickup.path() + "/vehicle-state", pickup.guest, null).body();
+        assertEquals("STALE", stale.path("freshness").asText());
+        assertEquals(0, stale.path("validForMillis").asLong());
+    }
+
+    private Map<String, Object> confirmation(JsonNode snapshot, Map<String, Object> place, String sourceTime) {
+        return Map.of("proposalId", snapshot.path("placeProposal").path("proposalId").asText(),
+                "expectedPlaceVersion", 1, "place", place, "durationSeconds", 180, "sourceTime", sourceTime);
+    }
+
+    private Map<String, Object> telemetry(long sequence, long version) {
+        return Map.of("latitude", 37.01, "longitude", 127.01, "durationSeconds", 120,
+                "sourceTime", clock.instant().toString(), "sequence", sequence, "placeVersion", version);
+    }
+
+    private Pickup active() throws Exception {
+        Pickup pickup = connected();
+        String participant = get(pickup, pickup.owner).path("participant").path("participantId").asText();
+        assertEquals(200, call("POST", pickup.path() + "/participants/" + participant + "/approval", pickup.owner, null).status());
+        return pickup;
+    }
+
     private record Pickup(String id, String owner, String guest) {
         String path() { return "/api/v1/pickups/" + id; }
     }

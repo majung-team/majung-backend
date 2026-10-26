@@ -281,7 +281,13 @@ class RideRequestService {
         }
         return new RideRequestApi.View(request.id,state,other==null?"연결이 종료된 회원":other.nickname,other==null?null:other.majungId,place(request),request.expiresAt,ahead,remaining,remainingValidForMillis,request.driverInvitation);
     }
-    private PickupApi.Place place(RideRequest r) { return new PickupApi.Place(r.placeLabel,r.placeLatitude,r.placeLongitude); }
+    private PickupApi.Place place(RideRequest r) {
+        if (r.pickupId != null) {
+            Pickup pickup = pickups.findById(r.pickupId).orElse(null);
+            if (pickup != null) return new PickupApi.Place(pickup.placeLabel, pickup.placeLatitude, pickup.placeLongitude);
+        }
+        return new PickupApi.Place(r.placeLabel, r.placeLatitude, r.placeLongitude);
+    }
     private static ApiException notFound() { return error(404,"RIDE_REQUEST_NOT_FOUND","마중 요청을 찾을 수 없어요."); }
     private static ApiException conflict(String message) { return error(409,"RIDE_REQUEST_STATE",message); }
     private static ApiException error(int status,String code,String message) { return new ApiException(status,code,message); }

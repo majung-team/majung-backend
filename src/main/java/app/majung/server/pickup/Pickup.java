@@ -30,6 +30,9 @@ class Pickup {
     Instant lastVehicleActivityAt;
     @Enumerated(EnumType.STRING)
     Status status;
+    long placeVersion = 1;
+    UUID proposalId;
+    UUID confirmedProposalId;
     String placeLabel;
     double placeLatitude;
     double placeLongitude;
@@ -105,6 +108,7 @@ class Pickup {
     }
 
     void clearProposal() {
+        proposalId = null;
         proposalBy = null;
         proposalLabel = null;
         proposalLatitude = null;

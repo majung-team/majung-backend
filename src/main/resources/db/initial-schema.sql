@@ -13,6 +13,9 @@ CREATE TABLE pickup (
     arrived_at TIMESTAMP(6) WITH TIME ZONE,
     last_vehicle_activity_at TIMESTAMP(6) WITH TIME ZONE,
     status VARCHAR(255),
+    place_version BIGINT NOT NULL DEFAULT 1,
+    proposal_id UUID,
+    confirmed_proposal_id UUID,
     place_label VARCHAR(255),
     place_latitude DOUBLE PRECISION NOT NULL,
     place_longitude DOUBLE PRECISION NOT NULL,
@@ -127,6 +130,7 @@ CREATE INDEX ride_request_driver ON ride_request(driver_id, created_at);
 CREATE INDEX ride_request_passenger ON ride_request(passenger_id, created_at);
 
 CREATE TABLE arrival_push (
+    place_version BIGINT NOT NULL DEFAULT 1,
     pickup_id UUID PRIMARY KEY,
     endpoint VARCHAR(1024) NOT NULL,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
