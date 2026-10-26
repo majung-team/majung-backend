@@ -119,6 +119,65 @@ class RideRequestTest {
         assertEquals(0,service.passenger(b.id).get(0).peopleAhead());
         assertEquals("ACTIVE",service.start(driver.auth,second.requestId()).pickup().status());
     }
+    RideRequestApi.Invite invitation(Driver driver, Member passenger) {
+        var connection = members.request(driver.member.id, passenger.id);
+        members.change(passenger.id, connection.connectionId(), "accept");
+        return new RideRequestApi.Invite(connection.connectionId(), new PickupApi.Place("초대 장소", 37.3, 127.3), UUID.randomUUID());
+    }
+    @Test void connectedInvitationNeedsPassengerConsentAndUsesExistingQueue() {
+        Driver driver = driver(); Member a = member(); Member b = member();
+        var first = service.submit(a.id, input(driver)); service.accept(driver.auth, first.requestId());
+        var active = service.start(driver.auth, first.requestId());
+        var input = invitation(driver, b);
+        assertEquals(1, service.contacts(driver.auth, 0).size());
+        var invited = service.invite(driver.auth, input);
+        assertEquals("INVITED", invited.status()); assertTrue(invited.driverInvitation());
+        assertEquals(invited.requestId(), service.invite(driver.auth, input).requestId());
+        assertEquals(403, assertThrows(ApiException.class, () -> service.tracking(b.id, invited.requestId())).status);
+        assertEquals(409, assertThrows(ApiException.class, () -> service.accept(driver.auth, invited.requestId())).status);
+        assertEquals(409, assertThrows(ApiException.class, () -> service.start(driver.auth, invited.requestId())).status);
+        assertEquals(404, assertThrows(ApiException.class, () -> service.answerInvitation(a.id, invited.requestId(), true)).status);
+        var accepted = service.answerInvitation(b.id, invited.requestId(), true);
+        assertEquals("QUEUED", accepted.status()); assertEquals(1, accepted.peopleAhead());
+        service.answerInvitation(b.id, invited.requestId(), true);
+        assertEquals(409, assertThrows(ApiException.class, () -> service.submit(b.id, input(driver))).status);
+        pickups.arrivePickup(active.pickupId(), "Bearer " + active.driverToken());
+        pickups.endPickup(active.pickupId(), "Bearer " + active.driverToken(), Pickup.Status.COMPLETED);
+        assertEquals("ACTIVE", service.start(driver.auth, invited.requestId()).pickup().status());
+        assertEquals("ACTIVE", service.tracking(b.id, invited.requestId()).pickup().status());
+    }
+    @Test void invitationExpiryRejectionCancellationAndLostConnectionAreEnforced() {
+        Driver driver = driver(); Member a = member(); var input = invitation(driver, a);
+        var invited = service.invite(driver.auth, input);
+        service.answerInvitation(a.id, invited.requestId(), false);
+        assertEquals("REJECTED", service.answerInvitation(a.id, invited.requestId(), false).status());
+        var second = service.invite(driver.auth, new RideRequestApi.Invite(input.connectionId(), input.place(), UUID.randomUUID()));
+        assertEquals("CANCELLED", service.cancelInvitation(driver.auth, second.requestId()).status());
+        var third = service.invite(driver.auth, new RideRequestApi.Invite(input.connectionId(), input.place(), UUID.randomUUID()));
+        clock.advance(Duration.ofMinutes(30));
+        assertEquals("EXPIRED", service.passenger(a.id).stream().filter(r -> r.requestId().equals(third.requestId())).findFirst().orElseThrow().status());
+        assertEquals(409, assertThrows(ApiException.class, () -> service.answerInvitation(a.id, third.requestId(), true)).status);
+        var fourth = service.invite(driver.auth, new RideRequestApi.Invite(input.connectionId(), input.place(), UUID.randomUUID()));
+        members.change(a.id, input.connectionId(), "disconnect");
+        assertTrue(service.contacts(driver.auth, 0).isEmpty());
+        assertEquals(409, assertThrows(ApiException.class, () -> service.answerInvitation(a.id, fourth.requestId(), true)).status);
+        assertEquals(409, assertThrows(ApiException.class, () -> service.invite(driver.auth, input)).status);
+    }
+    @Test void invitationRequiresOwningVehicleAndConfirmedPersonConnection() throws Exception {
+        Driver driver = driver(); Driver stranger = driver(); Member a = member();
+        var connection = members.request(driver.member.id, a.id);
+        var input = new RideRequestApi.Invite(connection.connectionId(), new PickupApi.Place("시험 장소",37.0,127.0),UUID.randomUUID());
+        assertEquals(409, assertThrows(ApiException.class, () -> service.invite(driver.auth, input)).status);
+        members.change(a.id, connection.connectionId(), "accept");
+        assertEquals(409, assertThrows(ApiException.class, () -> service.invite(stranger.auth, input)).status);
+        var invited = service.invite(driver.auth, input);
+        var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        var principal = new DefaultOAuth2User(List.of(new SimpleGrantedAuthority("ROLE_MEMBER")),Map.of("memberId",a.id.toString()),"memberId");
+        mvc.perform(post("/api/v1/ride-requests/"+invited.requestId()+"/accept-invitation").with(oauth2Login().oauth2User(principal))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/ride-requests/"+invited.requestId()+"/accept-invitation").with(oauth2Login().oauth2User(principal)).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("QUEUED"));
+        links.detachDevice(driver.auth);
+        assertEquals(409, assertThrows(ApiException.class, () -> service.start(driver.auth, invited.requestId())).status);
+    }
     @Test void sessionAndCsrfAreRequiredOnPassengerApi() throws Exception {
         var mvc=MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         mvc.perform(get("/api/v1/ride-requests")).andExpect(status().isUnauthorized());

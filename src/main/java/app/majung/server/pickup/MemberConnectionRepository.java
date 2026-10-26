@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 interface MemberConnectionRepository extends JpaRepository<MemberConnection, UUID> {
+    @Query("select c from MemberConnection c where (c.firstMember = :self or c.secondMember = :self) and c.status = 'ACCEPTED' order by c.updatedAt desc, c.id")
+    List<MemberConnection> accepted(@Param("self") UUID self, Pageable pageable);
     @Modifying
     @Query("delete from MemberConnection c where c.firstMember = :member or c.secondMember = :member")
     void deleteForMember(@Param("member") UUID member);

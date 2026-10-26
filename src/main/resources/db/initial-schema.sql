@@ -111,7 +111,8 @@ CREATE TABLE ride_request (
     place_longitude DOUBLE PRECISION NOT NULL,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     expires_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    queue_order BIGINT
+    queue_order BIGINT,
+    driver_invitation BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX ride_request_driver ON ride_request(driver_id, created_at);
 CREATE INDEX ride_request_passenger ON ride_request(passenger_id, created_at);
