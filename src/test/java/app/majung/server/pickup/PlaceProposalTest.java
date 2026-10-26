@@ -49,6 +49,23 @@ class PlaceProposalTest {
         assertEquals(37.0, seenByDriver.path("place").path("latitude").asDouble());
     }
 
+    @Test void proposalAndReadinessReceiptDoNotOverwriteEachOther() throws Exception {
+        Pickup pickup = connected();
+        call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER));
+        call("PUT", pickup.path() + "/readiness", pickup.guest, Map.of("readiness", "READY", "sequence", 1));
+        JsonNode before = get(pickup, pickup.owner);
+        Response receipt = call("PUT", pickup.path() + "/readiness-receipt", pickup.owner,
+                Map.of("participantId", before.path("participant").path("participantId").asText(), "sequence", 1));
+        assertEquals(200, receipt.status());
+        assertEquals("정문 앞", receipt.body().path("placeProposal").path("place").path("label").asText());
+        assertEquals("예시 장소", receipt.body().path("place").path("label").asText());
+        call("DELETE", pickup.path() + "/place-proposal", pickup.guest, null);
+        JsonNode withdrawn = get(pickup, pickup.guest);
+        assertTrue(withdrawn.path("placeProposal").isNull());
+        assertEquals(1, withdrawn.path("participant").path("readinessReceivedSequence").asInt());
+        assertEquals("READY", withdrawn.path("participant").path("readiness").asText());
+    }
+
     @Test void driverCanProposeAndReplaceAndEitherSideSeesTheLatest() throws Exception {
         Pickup pickup = connected();
         call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER));
