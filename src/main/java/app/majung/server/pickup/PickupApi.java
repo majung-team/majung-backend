@@ -46,7 +46,8 @@ class PickupApi {
     record Snapshot(UUID pickupId, String status, Place place, Participant participant,
                     Instant inviteExpiresAt, Instant expiresAt, Instant endedAt) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
-                        Instant sourceTime, Instant receivedAt, long sequence, long validForMillis) { }
+                        Instant sourceTime, Instant receivedAt, long sequence, long validForMillis,
+                        Long ageMillis) { }
 
     private final PickupService pickupService;
     private final DeploymentPolicy deploymentPolicy;

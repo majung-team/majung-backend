@@ -184,7 +184,7 @@ class PickupApiTest {
     }
 
     @Test
-    void hideStaleTelemetryAndDoNotRefreshItThroughReplay() throws Exception {
+    void keepStaleTelemetryBrieflyAndDoNotRefreshItThroughReplay() throws Exception {
         Session session = create();
         Guest guest = join(session);
         approve(session, guest);
@@ -197,8 +197,16 @@ class PickupApiTest {
         assertEquals(200, replay.status());
         assertEquals("STALE", replay.body().path("freshness").asText());
         assertEquals(0, replay.body().path("validForMillis").asLong());
-        assertTrue(replay.body().path("latitude").isNull());
-        assertTrue(replay.body().path("durationSeconds").isNull());
+        assertEquals(30_000, replay.body().path("ageMillis").asLong());
+        assertEquals(300, replay.body().path("durationSeconds").asLong());
+        assertFalse(replay.body().path("latitude").isNull());
+        clock.advance(Duration.ofSeconds(91));
+        Response lost = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        assertEquals("STALE", lost.body().path("freshness").asText());
+        assertEquals(121_000, lost.body().path("ageMillis").asLong());
+        assertTrue(lost.body().path("latitude").isNull());
+        assertTrue(lost.body().path("durationSeconds").isNull());
+        assertFalse(lost.body().path("receivedAt").isNull());
         assertError(vehicle(session, 3, 200, source.minusSeconds(1)), 409, "STALE_EVENT");
         assertError(vehicle(session, 3, 200, clock.instant().plusSeconds(1)), 400, "FUTURE_SOURCE_TIME");
         assertEquals("FRESH", vehicle(session, 3, 200, clock.instant()).body().path("freshness").asText());

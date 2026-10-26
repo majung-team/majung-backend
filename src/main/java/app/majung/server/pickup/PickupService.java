@@ -20,14 +20,17 @@ class PickupService {
     private final Duration inviteTtl;
     private final Duration pickupTtl;
     private final Duration vehicleFreshness;
+    private final Duration vehicleLastKnown;
 
     PickupService(PickupRepository pickupRepository, TokenService tokenService, Clock clock,
                   VehicleRegistrationService vehicleRegistrationService, DeploymentPolicy deploymentPolicy,
                   @Value("${majung.invite-ttl}") Duration inviteTtl,
                   @Value("${majung.pickup-ttl}") Duration pickupTtl,
-                  @Value("${majung.vehicle-freshness}") Duration vehicleFreshness) {
+                  @Value("${majung.vehicle-freshness}") Duration vehicleFreshness,
+                  @Value("${majung.vehicle-last-known}") Duration vehicleLastKnown) {
         if (inviteTtl.isNegative() || inviteTtl.isZero() || pickupTtl.compareTo(inviteTtl) < 0
-                || vehicleFreshness.isNegative() || vehicleFreshness.isZero()) {
+                || vehicleFreshness.isNegative() || vehicleFreshness.isZero()
+                || vehicleLastKnown.compareTo(vehicleFreshness) < 0) {
             throw new IllegalArgumentException("Invalid pickup lifetime configuration");
         }
         this.pickupRepository = pickupRepository;
@@ -38,6 +41,7 @@ class PickupService {
         this.inviteTtl = inviteTtl;
         this.pickupTtl = pickupTtl;
         this.vehicleFreshness = vehicleFreshness;
+        this.vehicleLastKnown = vehicleLastKnown;
     }
 
     PickupApi.Created createPickup(PickupApi.Place place, String authorization) {
@@ -271,17 +275,21 @@ class PickupService {
 
     private PickupApi.VehicleState toVehicleResponse(Pickup pickup) {
         if (pickup.vehicleSourceTime == null) {
-            return new PickupApi.VehicleState("WAITING", null, null, null, null, null, pickup.vehicleSequence, 0);
+            return new PickupApi.VehicleState("WAITING", null, null, null, null, null, pickup.vehicleSequence, 0, null);
         }
-        Instant sourceExpiry = pickup.vehicleSourceTime.plus(vehicleFreshness);
-        Instant receiptExpiry = pickup.vehicleReceivedAt.plus(vehicleFreshness);
-        Instant validUntil = sourceExpiry.isBefore(receiptExpiry) ? sourceExpiry : receiptExpiry;
-        long validForMillis = Math.max(0, Duration.between(clock.instant(), validUntil).toMillis());
+        // Age uses the older of the SDK time and the server receipt, matching the freshness check.
+        Instant observedAt = pickup.vehicleSourceTime.isBefore(pickup.vehicleReceivedAt)
+                ? pickup.vehicleSourceTime : pickup.vehicleReceivedAt;
+        Duration age = Duration.between(observedAt, clock.instant());
+        if (age.isNegative()) age = Duration.ZERO;
+        long validForMillis = Math.max(0, vehicleFreshness.minus(age).toMillis());
         boolean fresh = validForMillis > 0;
+        // Stale values stay visible briefly so the passenger sees a dimmed last position, then they are withheld.
+        boolean lastKnown = age.compareTo(vehicleLastKnown) <= 0;
         return new PickupApi.VehicleState(fresh ? "FRESH" : "STALE",
-                fresh ? pickup.vehicleLatitude : null, fresh ? pickup.vehicleLongitude : null,
-                fresh ? pickup.durationSeconds : null, pickup.vehicleSourceTime,
-                pickup.vehicleReceivedAt, pickup.vehicleSequence, validForMillis);
+                lastKnown ? pickup.vehicleLatitude : null, lastKnown ? pickup.vehicleLongitude : null,
+                lastKnown ? pickup.durationSeconds : null, pickup.vehicleSourceTime,
+                pickup.vehicleReceivedAt, pickup.vehicleSequence, validForMillis, age.toMillis());
     }
 
     private ApiException error(int status, String code, String message) {
