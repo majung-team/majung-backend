@@ -26,6 +26,8 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 
 [카카오 가입·닉네임 검색·연결 API](docs/account-connections.md): 서버 환경변수, 세션·CSRF, DB 업그레이드와 검증 범위.
 
+[탑승자 지도용 카카오맵 키](docs/kakao-map.md): 설정 응답, 서버 환경변수, 도메인 등록.
+
 ## GitHub Actions
 
 [테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.
