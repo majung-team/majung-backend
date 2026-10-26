@@ -46,7 +46,8 @@ class PickupApi {
     record Joined(UUID participantId, String participantToken, String status) { }
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
                        long readinessSequence, long readinessReceivedSequence) { }
-    record Snapshot(UUID pickupId, String status, Place place, Participant participant,
+    record PlaceProposal(Place place, Pickup.Proposer proposedBy, Instant proposedAt) { }
+    record Snapshot(UUID pickupId, String status, Place place, PlaceProposal placeProposal, Participant participant,
                     Instant inviteExpiresAt, Instant expiresAt, Instant endedAt) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
                         Instant sourceTime, Instant receivedAt, long sequence, long validForMillis,
@@ -134,6 +135,17 @@ class PickupApi {
     @GetMapping("/{id}/vehicle-state")
     VehicleState vehicle(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
         return pickupService.getVehicle(id, auth);
+    }
+
+    @PutMapping(value = "/{id}/place-proposal", consumes = "application/json")
+    Snapshot proposePlace(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth,
+                          @Valid @RequestBody CreateRequest request) {
+        return pickupService.proposePlace(id, auth, request.place());
+    }
+
+    @DeleteMapping("/{id}/place-proposal")
+    Snapshot withdrawPlaceProposal(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
+        return pickupService.withdrawPlaceProposal(id, auth);
     }
 
     @PostMapping("/{id}/arrival")

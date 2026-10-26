@@ -34,6 +34,8 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 
 [도착 임박 웹 푸시](docs/arrival-push.md): 3분 전 알림 한 번, 구독 API, VAPID 키와 DB 적용.
 
+[장소 제안](docs/place-proposal.md): 탑승자·운전자의 장소 제안과 확정 장소 보존, DB 적용.
+
 ## GitHub Actions
 
 [테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.

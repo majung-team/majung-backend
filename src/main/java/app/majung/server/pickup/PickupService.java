@@ -124,6 +124,7 @@ class PickupService {
         pickup.status = Pickup.Status.INVITING;
         pickup.arrivedAt = null;
         pickup.lastVehicleActivityAt = null;
+        pickup.clearProposal();
         // The disconnected passenger's browser must not be notified about the next passenger's pickup.
         arrivalPush.remove(pickup.id);
         // The previous passenger's view of the car must not carry over; the sequence stays monotonic.
@@ -272,6 +273,62 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
+    // Both sides may suggest a place. The confirmed place never changes here; the driver decides separately.
+    PickupApi.Snapshot proposePlace(UUID id, String auth, PickupApi.Place place) {
+        String token = tokenService.bearer(auth);
+        Pickup pickup = locked(id);
+        boolean isOwner = tokenService.matches(token, pickup.ownerHash);
+        if (!isOwner && !tokenService.matches(token, pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "이 픽업에 접근할 수 없습니다.");
+        }
+        return applyProposal(pickup, isOwner ? Pickup.Proposer.DRIVER : Pickup.Proposer.PASSENGER, place, isOwner);
+    }
+
+    PickupApi.Snapshot withdrawPlaceProposal(UUID id, String auth) {
+        String token = tokenService.bearer(auth);
+        Pickup pickup = locked(id);
+        boolean isOwner = tokenService.matches(token, pickup.ownerHash);
+        if (!isOwner && !tokenService.matches(token, pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "이 픽업에 접근할 수 없습니다.");
+        }
+        return dropProposal(pickup, isOwner ? null : Pickup.Proposer.PASSENGER, isOwner);
+    }
+
+    PickupApi.Snapshot proposePlaceForAccount(UUID id, PickupApi.Place place) {
+        return applyProposal(locked(id), Pickup.Proposer.PASSENGER, place, false);
+    }
+
+    PickupApi.Snapshot withdrawPlaceProposalForAccount(UUID id) {
+        return dropProposal(locked(id), Pickup.Proposer.PASSENGER, false);
+    }
+
+    private PickupApi.Snapshot applyProposal(Pickup pickup, Pickup.Proposer by, PickupApi.Place place, boolean isOwner) {
+        requireSharing(pickup);
+        if (pickup.status != Pickup.Status.ACTIVE) {
+            throw error(409, "INVALID_STATE", "도착 전의 픽업에서만 장소를 제안할 수 있습니다.");
+        }
+        if (Math.abs(place.latitude() - pickup.placeLatitude) < 0.00001
+                && Math.abs(place.longitude() - pickup.placeLongitude) < 0.00001) {
+            throw error(409, "SAME_PLACE", "지금 정해진 장소와 같은 곳입니다.");
+        }
+        pickup.proposalBy = by;
+        pickup.proposalLabel = place.label().strip();
+        pickup.proposalLatitude = place.latitude();
+        pickup.proposalLongitude = place.longitude();
+        pickup.proposalAt = clock.instant();
+        return toPickupResponse(pickup, isOwner);
+    }
+
+    // The driver can clear any proposal; the passenger can only clear their own.
+    private PickupApi.Snapshot dropProposal(Pickup pickup, Pickup.Proposer onlyBy, boolean isOwner) {
+        requireSharing(pickup);
+        if (pickup.proposalBy != null && onlyBy != null && pickup.proposalBy != onlyBy) {
+            throw error(403, "FORBIDDEN", "운전자가 제안한 장소는 운전자만 취소할 수 있습니다.");
+        }
+        pickup.clearProposal();
+        return toPickupResponse(pickup, isOwner);
+    }
+
     PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, String endpoint) {
         Pickup pickup = locked(id);
         if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
@@ -352,11 +409,14 @@ class PickupService {
                 || pickup.status == Pickup.Status.ACTIVE || pickup.status == Pickup.Status.ARRIVED);
         PickupApi.Place place = visible
                 ? new PickupApi.Place(pickup.placeLabel, pickup.placeLatitude, pickup.placeLongitude) : null;
+        PickupApi.PlaceProposal proposal = visible && pickup.proposalBy != null
+                ? new PickupApi.PlaceProposal(new PickupApi.Place(pickup.proposalLabel, pickup.proposalLatitude,
+                pickup.proposalLongitude), pickup.proposalBy, pickup.proposalAt) : null;
         PickupApi.Participant participant = pickup.participantId == null ? null
                 : new PickupApi.Participant(pickup.participantId, pickup.participantName,
                 pickup.readiness, pickup.readinessSequence, pickup.readinessReceivedSequence);
         String status = expired ? "EXPIRED" : inviteExpired ? "INVITE_EXPIRED" : pickup.status.name();
-        return new PickupApi.Snapshot(pickup.id, status, place, participant,
+        return new PickupApi.Snapshot(pickup.id, status, place, proposal, participant,
                 pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt);
     }
 
