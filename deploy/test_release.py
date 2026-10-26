@@ -34,6 +34,11 @@ class ReleaseTest(unittest.TestCase):
                 release.unpack_web(web_artifact(info), pathlib.Path(temporary))
                 self.fail('unsafe archive accepted')
 
+    def test_map_script_is_an_allowed_web_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release.unpack_web(web_artifact(tarfile.TarInfo('map.js')), pathlib.Path(temporary))
+            self.assertTrue((pathlib.Path(temporary) / 'map.js').is_file())
+
     def test_jar_must_contain_matching_built_revision(self):
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w') as archive:

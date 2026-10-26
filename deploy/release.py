@@ -22,7 +22,7 @@ import zipfile
 RELEASE_ROOT = pathlib.Path('/var/lib/majung-deploy/releases')
 TARGETS = {'backend': pathlib.Path('/opt/majung/majung-server.jar'), 'web': pathlib.Path('/srv/majung/web')}
 
-WEB_FILES = {'index.html', 'style.css', 'app.js', 'api.js', 'model.js',
+WEB_FILES = {'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js',
              'account.html', 'account.css', 'account.js', 'account-api.js'}
 
 
