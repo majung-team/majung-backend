@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 class PickupService {
+    private static final String DEFAULT_PARTICIPANT_NAME = "탑승자";
     private final PickupRepository pickupRepository;
+    private final RideRequestRepository rideRequestRepository;
     private final TokenService tokenService;
     private final Clock clock;
     private final VehicleRegistrationService vehicleRegistrationService;
@@ -22,7 +24,8 @@ class PickupService {
     private final Duration vehicleFreshness;
     private final Duration vehicleLastKnown;
 
-    PickupService(PickupRepository pickupRepository, TokenService tokenService, Clock clock,
+    PickupService(PickupRepository pickupRepository, RideRequestRepository rideRequestRepository,
+                  TokenService tokenService, Clock clock,
                   VehicleRegistrationService vehicleRegistrationService, DeploymentPolicy deploymentPolicy,
                   @Value("${majung.invite-ttl}") Duration inviteTtl,
                   @Value("${majung.pickup-ttl}") Duration pickupTtl,
@@ -34,6 +37,7 @@ class PickupService {
             throw new IllegalArgumentException("Invalid pickup lifetime configuration");
         }
         this.pickupRepository = pickupRepository;
+        this.rideRequestRepository = rideRequestRepository;
         this.tokenService = tokenService;
         this.clock = clock;
         this.vehicleRegistrationService = vehicleRegistrationService;
@@ -71,10 +75,12 @@ class PickupService {
         }
         String guestToken = tokenService.issue();
         pickup.participantId = UUID.randomUUID();
-        pickup.participantName = request.displayName().strip();
+        // The first person to open the invitation is connected right away; the single-use invite is consumed.
+        pickup.participantName = request.displayName() == null || request.displayName().isBlank()
+                ? DEFAULT_PARTICIPANT_NAME : request.displayName().strip();
         pickup.participantHash = tokenService.hash(guestToken);
         pickup.inviteHash = null;
-        pickup.status = Pickup.Status.WAITING_APPROVAL;
+        pickup.status = Pickup.Status.ACTIVE;
         return new PickupApi.Joined(pickup.participantId, guestToken, pickup.status.name());
     }
 
@@ -84,6 +90,23 @@ class PickupService {
         if (pickup.status != Pickup.Status.INVITING && pickup.status != Pickup.Status.WAITING_APPROVAL) {
             throw error(409, "INVALID_STATE", "위치 공유 중에는 초대를 다시 만들 수 없습니다.");
         }
+        return reissueInvitation(pickup);
+    }
+
+    // Only the driver can disconnect the current passenger; the passenger's token stops working immediately.
+    PickupApi.Invitation disconnectParticipant(UUID id, String auth) {
+        Pickup pickup = owner(id, auth);
+        requireOpen(pickup);
+        if (rideRequestRepository.existsByPickupId(id)) {
+            throw error(409, "RIDE_REQUEST_PICKUP", "마중 요청으로 시작한 픽업은 요청 목록에서 관리해주세요.");
+        }
+        if (pickup.participantHash == null) {
+            throw error(409, "NO_PARTICIPANT", "연결된 탑승자가 없습니다.");
+        }
+        return reissueInvitation(pickup);
+    }
+
+    private PickupApi.Invitation reissueInvitation(Pickup pickup) {
         String inviteToken = tokenService.issue();
         pickup.inviteHash = tokenService.hash(inviteToken);
         Instant proposedExpiry = clock.instant().plus(inviteTtl);
@@ -94,6 +117,8 @@ class PickupService {
         pickup.readiness = Pickup.Readiness.WAITING;
         pickup.readinessSequence = 0;
         pickup.status = Pickup.Status.INVITING;
+        // The previous passenger's view of the car must not carry over; the sequence stays monotonic.
+        pickup.clearVehicle();
         return new PickupApi.Invitation(inviteToken, pickup.inviteExpiresAt);
     }
 

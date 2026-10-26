@@ -56,8 +56,9 @@ class DeploymentHttpTest {
         JsonNode joined = json.readTree(call("POST", path + "/participants", null, null,
                 "{\"displayName\":\"테스트\",\"inviteToken\":\"" + created.path("inviteToken").asText() + "\"}", null).body());
         String guest = joined.path("participantToken").asText();
-        JsonNode waiting = json.readTree(call("GET", path, null, guest, null, null).body());
-        assertTrue(waiting.path("place").isNull());
+        JsonNode connected = json.readTree(call("GET", path, null, guest, null, null).body());
+        assertEquals("ACTIVE", connected.path("status").asText());
+        assertFalse(connected.path("place").isNull());
         assertEquals(200, call("POST", path + "/participants/" + joined.path("participantId").asText()
                 + "/approval", null, owner, null, null).statusCode());
         assertEquals(200, call("PUT", path + "/readiness", null, guest,

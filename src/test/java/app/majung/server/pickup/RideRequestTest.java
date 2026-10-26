@@ -108,6 +108,14 @@ class RideRequestTest {
         var positions=List.of(service.passenger(a.id).get(0).peopleAhead(),service.passenger(b.id).get(0).peopleAhead()).stream().sorted().toList();
         assertEquals(List.of(0,1),positions);
     }
+    @Test void passengerOfARequestedPickupCannotBeDisconnectedThroughTheInvitationApi() {
+        Driver driver=driver(); Member a=member();
+        var request=service.submit(a.id,input(driver)); service.accept(driver.auth,request.requestId());
+        var active=service.start(driver.auth,request.requestId());
+        assertEquals(409,assertThrows(ApiException.class,()->pickups.disconnectParticipant(active.pickupId(),"Bearer "+active.driverToken())).status);
+        assertEquals("ACTIVE",pickups.getPickup(active.pickupId(),"Bearer "+active.driverToken()).status());
+    }
+
     @Test void accountUnlinkStopsOnlyItsRequestedPickupAndRemovesAssociation() {
         Driver driver=driver(); Member a=member(); Member b=member();
         var first=service.submit(a.id,input(driver)); service.accept(driver.auth,first.requestId());

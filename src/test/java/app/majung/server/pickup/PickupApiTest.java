@@ -75,10 +75,12 @@ class PickupApiTest {
     void completePickupFlowAndRemoveAccessAfterEnd() throws Exception {
         Session session = create();
         Guest guest = join(session);
-        Response waiting = call("GET", session.path(), guest.token(), null);
-        assertEquals("WAITING_APPROVAL", waiting.body().path("status").asText());
-        assertTrue(waiting.body().path("place").isNull());
-        assertError(call("GET", session.path() + "/vehicle-state", guest.token(), null), 403, "APPROVAL_REQUIRED");
+        Response connected = call("GET", session.path(), guest.token(), null);
+        assertEquals("ACTIVE", connected.body().path("status").asText());
+        assertFalse(connected.body().path("place").isNull());
+        assertEquals("테스트", connected.body().path("participant").path("displayName").asText());
+        assertEquals("WAITING", call("GET", session.path() + "/vehicle-state", guest.token(), null).body().path("freshness").asText());
+        // Clients that still send the old approval request keep working.
         assertEquals(200, approve(session, guest).status());
         assertEquals(200, vehicle(session, 1, 300, clock.instant()).status());
         Response shared = call("GET", session.path() + "/vehicle-state", guest.token(), null);
@@ -134,25 +136,73 @@ class PickupApiTest {
     }
 
     @Test
-    void rejectExpiredInvitationAndPendingApprovalAtExactBoundary() throws Exception {
+    void rejectExpiredInvitationAtExactBoundaryButKeepConnectedPassenger() throws Exception {
         Session unused = create();
-        Session pending = create();
-        Guest guest = join(pending);
+        Session connected = create();
+        Guest guest = join(connected);
         clock.advance(Duration.ofMinutes(15));
         assertError(joinRequest(unused, unused.invite()), 410, "INVITE_UNAVAILABLE");
-        assertError(approve(pending, guest), 410, "INVITE_EXPIRED");
-        assertEquals("INVITE_EXPIRED", call("GET", pending.path(), guest.token(), null).body().path("status").asText());
+        assertEquals("INVITE_EXPIRED", call("GET", unused.path(), unused.owner(), null).body().path("status").asText());
+        assertEquals("ACTIVE", call("GET", connected.path(), guest.token(), null).body().path("status").asText());
     }
 
     @Test
-    void rotationRevokesOldInviteAndPendingParticipant() throws Exception {
+    void rotationRevokesOldInviteBeforeAnyoneJoins() throws Exception {
         Session session = create();
-        Guest guest = join(session);
         Response rotated = call("POST", session.path() + "/invitations", session.owner(), null);
         assertEquals(200, rotated.status());
-        assertError(call("GET", session.path(), guest.token(), null), 403, "FORBIDDEN");
         assertError(joinRequest(session, session.invite()), 403, "FORBIDDEN");
         assertEquals(201, joinRequest(session, rotated.body().path("inviteToken").asText()).status());
+        assertError(call("POST", session.path() + "/invitations", session.owner(), null), 409, "INVALID_STATE");
+    }
+
+    @Test
+    void firstPersonToJoinIsConnectedWithoutNameOrApproval() throws Exception {
+        Session session = create();
+        Response joined = call("POST", session.path() + "/participants", null, Map.of("inviteToken", session.invite()));
+        assertEquals(201, joined.status());
+        assertEquals("ACTIVE", joined.body().path("status").asText());
+        assertEquals("탑승자", call("GET", session.path(), session.owner(), null).body()
+                .path("participant").path("displayName").asText());
+        assertError(joinRequest(session, session.invite()), 410, "INVITE_UNAVAILABLE");
+        assertEquals(200, vehicle(session, 1, 300, clock.instant()).status());
+    }
+
+    @Test
+    void driverCanDisconnectPassengerAndInviteAgain() throws Exception {
+        Session session = create();
+        assertError(call("DELETE", session.path() + "/participant", session.owner(), null), 409, "NO_PARTICIPANT");
+        Guest wrong = join(session);
+        assertEquals(200, ready(session, wrong, "READY", 1).status());
+        assertEquals(200, vehicle(session, 1, 300, clock.instant()).status());
+        assertError(call("DELETE", session.path() + "/participant", wrong.token(), null), 403, "FORBIDDEN");
+        assertError(call("DELETE", session.path() + "/participant", null, null), 401, "UNAUTHORIZED");
+        Response reissued = call("DELETE", session.path() + "/participant", session.owner(), null);
+        assertEquals(200, reissued.status());
+        assertEquals("INVITING", call("GET", session.path(), session.owner(), null).body().path("status").asText());
+        assertTrue(call("GET", session.path(), session.owner(), null).body().path("participant").isNull());
+        // The disconnected passenger loses every kind of access immediately.
+        assertError(call("GET", session.path(), wrong.token(), null), 403, "FORBIDDEN");
+        assertError(call("GET", session.path() + "/vehicle-state", wrong.token(), null), 403, "FORBIDDEN");
+        assertError(ready(session, wrong, "PREPARING", 2), 403, "FORBIDDEN");
+        assertError(joinRequest(session, session.invite()), 403, "FORBIDDEN");
+        // No telemetry flows while nobody is connected, and nothing from before carries over.
+        assertError(vehicle(session, 2, 300, clock.instant()), 403, "APPROVAL_REQUIRED");
+        Response next = joinRequest(session, reissued.body().path("inviteToken").asText());
+        assertEquals(201, next.status());
+        String nextToken = next.body().path("participantToken").asText();
+        assertEquals("WAITING", call("GET", session.path() + "/vehicle-state", nextToken, null).body().path("freshness").asText());
+        assertEquals("WAITING", call("GET", session.path(), session.owner(), null).body().path("participant").path("readiness").asText());
+        assertEquals(200, vehicle(session, 2, 250, clock.instant()).status());
+        assertEquals(250, call("GET", session.path() + "/vehicle-state", nextToken, null).body().path("durationSeconds").asInt());
+    }
+
+    @Test
+    void disconnectIsRejectedAfterTheInvitationPickupEnds() throws Exception {
+        Session session = create();
+        join(session);
+        call("POST", session.path() + "/cancellation", session.owner(), null);
+        assertError(call("DELETE", session.path() + "/participant", session.owner(), null), 410, "PICKUP_ENDED");
     }
 
     @Test
@@ -215,9 +265,8 @@ class PickupApiTest {
     @Test
     void invalidationKeepsSequenceAndRejectsLateTelemetry() throws Exception {
         Session session = create();
-        Guest guest = join(session);
         assertError(call("DELETE", session.path() + "/vehicle-state", session.owner(), Map.of("sequence", 1)), 403, "APPROVAL_REQUIRED");
-        approve(session, guest);
+        Guest guest = join(session);
         vehicle(session, 1, 300, clock.instant());
         assertError(call("DELETE", session.path() + "/vehicle-state", guest.token(), Map.of("sequence", 2)), 403, "FORBIDDEN");
         Response cleared = call("DELETE", session.path() + "/vehicle-state", session.owner(), Map.of("sequence", 2));
@@ -313,7 +362,7 @@ class PickupApiTest {
         Session session = create();
         assertError(call("DELETE", session.path(), session.owner(), null), 405, "INVALID_REQUEST");
         assertError(call("POST", session.path() + "/participants", null,
-                Map.of("inviteToken", session.invite(), "displayName", " ")), 400, "INVALID_REQUEST");
+                Map.of("inviteToken", session.invite(), "displayName", "열세글자이름입니다만너무길어")), 400, "INVALID_REQUEST");
     }
 
     private Session create() throws Exception {

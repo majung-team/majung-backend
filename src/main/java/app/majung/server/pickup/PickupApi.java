@@ -30,7 +30,7 @@ class PickupApi {
                  @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude) { }
     record CreateRequest(@Valid @NotNull Place place) { }
     record JoinRequest(@NotBlank @Size(min = 43, max = 43) String inviteToken,
-                       @NotBlank @Size(max = 12) String displayName) { }
+                       @Size(max = 12) String displayName) { }
     record ReadinessRequest(@NotNull Pickup.Readiness readiness, @Positive long sequence) { }
     record VehicleInvalidation(@Positive long sequence) { }
     record VehicleRequest(@NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
@@ -73,6 +73,11 @@ class PickupApi {
     @PostMapping("/{id}/invitations")
     Invitation rotate(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
         return pickupService.rotateInvitation(id, auth);
+    }
+
+    @DeleteMapping("/{id}/participant")
+    Invitation disconnect(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
+        return pickupService.disconnectParticipant(id, auth);
     }
 
     @PostMapping("/{id}/participants/{participantId}/approval")
