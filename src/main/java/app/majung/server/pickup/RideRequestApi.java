@@ -29,6 +29,14 @@ class RideRequestApi {
     View cancel(Authentication auth, @PathVariable UUID id) { return service.cancel(AccountIdentity.requireMember(auth), id); }
     @GetMapping("/api/v1/ride-requests/{id}/tracking")
     Tracking tracking(Authentication auth, @PathVariable UUID id) { return service.tracking(AccountIdentity.requireMember(auth), id); }
+    @PutMapping("/api/v1/ride-requests/{id}/arrival-push")
+    PickupApi.ArrivalPushState subscribeArrivalPush(Authentication auth, @PathVariable UUID id, @Valid @RequestBody PickupApi.ArrivalPushRequest body) {
+        return service.subscribeArrivalPush(AccountIdentity.requireMember(auth), id, body.endpoint());
+    }
+    @DeleteMapping("/api/v1/ride-requests/{id}/arrival-push")
+    PickupApi.ArrivalPushState unsubscribeArrivalPush(Authentication auth, @PathVariable UUID id) {
+        return service.unsubscribeArrivalPush(AccountIdentity.requireMember(auth), id);
+    }
     @PutMapping("/api/v1/ride-requests/{id}/readiness")
     PickupApi.Snapshot readiness(Authentication auth, @PathVariable UUID id, @Valid @RequestBody PickupApi.ReadinessRequest body) {
         return service.readiness(AccountIdentity.requireMember(auth), id, body);

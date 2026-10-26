@@ -26,6 +26,14 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 
 [카카오 가입·닉네임 검색·연결 API](docs/account-connections.md): 서버 환경변수, 세션·CSRF, DB 업그레이드와 검증 범위.
 
+[차량 정보 끊김 표시용 응답](docs/vehicle-state.md): 30초 이후 마지막 위치·ETA와 경과 시간, 2분 이후 숨김.
+
+[탑승자 지도용 카카오맵 키](docs/kakao-map.md): 설정 응답, 서버 환경변수, 도메인 등록.
+
+[탑승자 자동 연결과 끊기](docs/auto-connect.md): 이름·승인 없는 연결, 운전자의 탑승자 끊기와 재초대.
+
+[도착 임박 웹 푸시](docs/arrival-push.md): 3분 전 알림 한 번, 구독 API, VAPID 키와 DB 적용.
+
 ## GitHub Actions
 
 [테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.

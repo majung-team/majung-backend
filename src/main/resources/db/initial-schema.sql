@@ -119,3 +119,11 @@ CREATE TABLE ride_request (
 );
 CREATE INDEX ride_request_driver ON ride_request(driver_id, created_at);
 CREATE INDEX ride_request_passenger ON ride_request(passenger_id, created_at);
+
+CREATE TABLE arrival_push (
+    pickup_id UUID PRIMARY KEY,
+    endpoint VARCHAR(1024) NOT NULL,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    notified_at TIMESTAMP(6) WITH TIME ZONE
+);
+CREATE INDEX arrival_push_created ON arrival_push(created_at);

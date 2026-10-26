@@ -30,7 +30,7 @@ class PickupApi {
                  @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude) { }
     record CreateRequest(@Valid @NotNull Place place) { }
     record JoinRequest(@NotBlank @Size(min = 43, max = 43) String inviteToken,
-                       @NotBlank @Size(max = 12) String displayName) { }
+                       @Size(max = 12) String displayName) { }
     record ReadinessRequest(@NotNull Pickup.Readiness readiness, @Positive long sequence) { }
     record VehicleInvalidation(@Positive long sequence) { }
     record VehicleRequest(@NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
@@ -40,13 +40,16 @@ class PickupApi {
     record Created(UUID pickupId, String driverToken, String inviteToken,
                    Instant inviteExpiresAt, Instant expiresAt) { }
     record Invitation(String inviteToken, Instant expiresAt) { }
+    record ArrivalPushRequest(@NotBlank @Size(max = 1024) String endpoint) { }
+    record ArrivalPushState(boolean subscribed) { }
     record Joined(UUID participantId, String participantToken, String status) { }
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
                        long readinessSequence) { }
     record Snapshot(UUID pickupId, String status, Place place, Participant participant,
                     Instant inviteExpiresAt, Instant expiresAt, Instant endedAt) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
-                        Instant sourceTime, Instant receivedAt, long sequence, long validForMillis) { }
+                        Instant sourceTime, Instant receivedAt, long sequence, long validForMillis,
+                        Long ageMillis) { }
 
     private final PickupService pickupService;
     private final DeploymentPolicy deploymentPolicy;
@@ -72,6 +75,22 @@ class PickupApi {
     @PostMapping("/{id}/invitations")
     Invitation rotate(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
         return pickupService.rotateInvitation(id, auth);
+    }
+
+    @PutMapping(value = "/{id}/arrival-push", consumes = "application/json")
+    ArrivalPushState subscribeArrivalPush(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth,
+                                          @Valid @RequestBody ArrivalPushRequest request) {
+        return pickupService.subscribeArrivalPush(id, auth, request.endpoint());
+    }
+
+    @DeleteMapping("/{id}/arrival-push")
+    ArrivalPushState unsubscribeArrivalPush(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
+        return pickupService.unsubscribeArrivalPush(id, auth);
+    }
+
+    @DeleteMapping("/{id}/participant")
+    Invitation disconnect(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
+        return pickupService.disconnectParticipant(id, auth);
     }
 
     @PostMapping("/{id}/participants/{participantId}/approval")

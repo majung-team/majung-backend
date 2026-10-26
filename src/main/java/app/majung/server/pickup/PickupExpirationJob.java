@@ -12,10 +12,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PickupExpirationJob {
     private final PickupRepository pickups;
     private final Clock clock;
+    private final ArrivalPushService arrivalPush;
     private final TransactionTemplate transaction;
-    PickupExpirationJob(PickupRepository pickups, Clock clock, PlatformTransactionManager manager) {
+    PickupExpirationJob(PickupRepository pickups, Clock clock, ArrivalPushService arrivalPush, PlatformTransactionManager manager) {
         this.pickups = pickups;
         this.clock = clock;
+        this.arrivalPush = arrivalPush;
         this.transaction = new TransactionTemplate(manager);
         this.transaction.setTimeout(5);
     }
@@ -28,7 +30,11 @@ class PickupExpirationJob {
             if (ids.isEmpty()) break;
             for (var id : ids) {
                 Boolean changed = transaction.execute(status -> pickups.findLockedById(id)
-                        .map(pickup -> pickup.expireIfDue(clock.instant())).orElse(false));
+                        .map(pickup -> {
+                            boolean expiredNow = pickup.expireIfDue(clock.instant());
+                            if (expiredNow) arrivalPush.remove(pickup.id);
+                            return expiredNow;
+                        }).orElse(false));
                 if (Boolean.TRUE.equals(changed)) expired++;
             }
             if (ids.size() < 100) break;

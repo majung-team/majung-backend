@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.deployment=true", "majung.admin-key=test-only-not-a-real-key-0123456789",
         "majung.development-tools=false", "majung.retention.enabled=true",
         "majung.retention.cleanup-interval-ms=3600000",
-        "majung.rate-limit.requests-per-minute=30", "majung.rate-limit.writes-per-minute=12"
+        "majung.rate-limit.requests-per-minute=30", "majung.rate-limit.writes-per-minute=12",
+        "majung.kakao-map.javascript-key=test-map-key"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
 class DeploymentHttpTest {
@@ -44,7 +45,7 @@ class DeploymentHttpTest {
         assertEquals(201, call("POST", "/api/v1/pickups", null, register(), PLACE, null).statusCode());
         HttpResponse<String> configuration = call("GET", "/api/v1/config", null, null, null, null);
         assertEquals(200, configuration.statusCode());
-        assertEquals("{\"developmentToolsEnabled\":false}", configuration.body());
+        assertEquals("{\"developmentToolsEnabled\":false,\"kakaoMapJavaScriptKey\":\"test-map-key\",\"webPushPublicKey\":null}", configuration.body());
         assertFalse(configuration.body().contains(TEST_KEY));
     }
 
@@ -55,8 +56,9 @@ class DeploymentHttpTest {
         JsonNode joined = json.readTree(call("POST", path + "/participants", null, null,
                 "{\"displayName\":\"테스트\",\"inviteToken\":\"" + created.path("inviteToken").asText() + "\"}", null).body());
         String guest = joined.path("participantToken").asText();
-        JsonNode waiting = json.readTree(call("GET", path, null, guest, null, null).body());
-        assertTrue(waiting.path("place").isNull());
+        JsonNode connected = json.readTree(call("GET", path, null, guest, null, null).body());
+        assertEquals("ACTIVE", connected.path("status").asText());
+        assertFalse(connected.path("place").isNull());
         assertEquals(200, call("POST", path + "/participants/" + joined.path("participantId").asText()
                 + "/approval", null, owner, null, null).statusCode());
         assertEquals(200, call("PUT", path + "/readiness", null, guest,

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 
 interface RideRequestRepository extends JpaRepository<RideRequest, UUID> {
     List<RideRequest> findByDriverIdOrderByCreatedAtAscIdAsc(UUID driverId);
+    boolean existsByPickupId(UUID pickupId);
     @Query("select r from RideRequest r where r.passengerId = :self order by r.createdAt desc, r.id")
     List<RideRequest> passengerRequests(UUID self, Pageable page);
     @Query("select r from RideRequest r where r.driverId = :member or r.passengerId = :member")
