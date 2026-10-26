@@ -30,20 +30,25 @@ class PickupEventStreams {
     });
     private final ConcurrentHashMap<UUID, Integer> counts = new ConcurrentHashMap<>();
     private int total;
+    private volatile boolean stopping;
+    private final java.util.Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
 
     SseEmitter open(UUID id, Supplier<State> read) {
         State initial = read.get(); // Reject invalid credentials before starting an HTTP stream.
         synchronized (this) {
+            if (stopping) throw new ApiException(503, "STREAM_PAUSED", "서버 연결을 다시 준비하고 있어요.");
             if (total >= 64 || counts.getOrDefault(id, 0) >= 4)
                 throw new ApiException(429, "STREAM_LIMIT", "열린 픽업 화면이 많아요. 다른 탭을 닫고 다시 확인해주세요.");
             total++;
             counts.merge(id, 1, Integer::sum);
         }
         SseEmitter emitter = new SseEmitter(TimeUnit.MINUTES.toMillis(25));
+        emitters.add(emitter);
         AtomicBoolean closed = new AtomicBoolean();
         AtomicReference<ScheduledFuture<?>> scheduled = new AtomicReference<>();
         Runnable cleanup = () -> {
             if (!closed.compareAndSet(false, true)) return;
+            emitters.remove(emitter);
             ScheduledFuture<?> task = scheduled.get();
             if (task != null) task.cancel(false);
             synchronized (this) {
@@ -54,11 +59,13 @@ class PickupEventStreams {
         emitter.onCompletion(cleanup);
         emitter.onTimeout(() -> { cleanup.run(); emitter.complete(); });
         emitter.onError(error -> cleanup.run());
+        if (stopping) { cleanup.run(); emitter.complete(); return emitter; }
         AtomicReference<Object> previous = new AtomicReference<>();
         AtomicReference<State> first = new AtomicReference<>(initial);
         long[] lastSent = {0};
         ScheduledFuture<?> task = executor.scheduleWithFixedDelay(() -> {
             if (closed.get()) return;
+            if (stopping) { cleanup.run(); emitter.complete(); return; }
             try {
                 State state = first.getAndSet(null);
                 if (state == null) state = read.get();
@@ -88,5 +95,10 @@ class PickupEventStreams {
         return emitter;
     }
 
-    @PreDestroy void close() { executor.shutdownNow(); }
+    @org.springframework.context.event.EventListener(org.springframework.context.event.ContextClosedEvent.class)
+    void closing() {
+        stopping = true;
+        emitters.forEach(SseEmitter::complete);
+    }
+    @PreDestroy void close() { closing(); executor.shutdownNow(); }
 }
