@@ -16,7 +16,7 @@ class DeploymentPolicy {
                      @Value("${majung.admin-key:${majung.creation-key:}}") String creationKey,
                      @Value("${majung.development-tools:true}") boolean developmentTools,
                      @Value("${majung.retention.enabled:false}") boolean retentionEnabled,
-                     @Value("${majung.retention.period:PT24H}") Duration retention,
+                     @Value("${majung.retention.period:P7D}") Duration retention,
                      @Value("${majung.rate-limit.enabled:true}") boolean rateLimitEnabled) {
         if (retention.compareTo(Duration.ofHours(1)) < 0) {
             throw new IllegalArgumentException("Retention must be at least one hour");

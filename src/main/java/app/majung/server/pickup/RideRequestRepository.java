@@ -14,7 +14,7 @@ interface RideRequestRepository extends JpaRepository<RideRequest, UUID> {
     @Query("select r from RideRequest r where r.driverId = :member or r.passengerId = :member")
     List<RideRequest> forMember(UUID member);
     @org.springframework.data.jpa.repository.Modifying
-    @Query("delete from RideRequest r where r.expiresAt <= :cutoff")
+    @Query("delete from RideRequest r where (r.pickupId is null and coalesce(r.endedAt, r.expiresAt) <= :cutoff) or (r.pickupId is not null and r.expiresAt <= :cutoff and not exists (select p.id from Pickup p where p.id = r.pickupId)) or exists (select p.id from Pickup p where p.id = r.pickupId and (p.endedAt <= :cutoff or (p.endedAt is null and p.expiresAt <= :cutoff)))")
     int deleteRetainedBefore(java.time.Instant cutoff);
 }
 

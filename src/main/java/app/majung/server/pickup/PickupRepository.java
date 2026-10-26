@@ -20,6 +20,9 @@ interface PickupRepository extends JpaRepository<Pickup, UUID> {
 
     java.util.List<Pickup> findByVehicleId(UUID vehicleId);
 
+    @Query("select p.id from Pickup p where (:after is null or p.id > :after) and p.status not in ('COMPLETED', 'CANCELLED', 'EXPIRED') order by p.id")
+    java.util.List<UUID> openIds(@org.springframework.data.repository.query.Param("after") UUID after, org.springframework.data.domain.Pageable page);
+
     @Modifying
     @Query("delete from Pickup p where p.endedAt <= :cutoff or (p.endedAt is null and p.expiresAt <= :cutoff)")
     int deleteRetainedBefore(Instant cutoff);

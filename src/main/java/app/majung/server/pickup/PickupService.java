@@ -34,7 +34,7 @@ class PickupService {
                   @Value("${majung.vehicle-freshness}") Duration vehicleFreshness,
                   @Value("${majung.vehicle-last-known}") Duration vehicleLastKnown) {
         if (inviteTtl.isNegative() || inviteTtl.isZero() || pickupTtl.compareTo(inviteTtl) < 0
-                || vehicleFreshness.isNegative() || vehicleFreshness.isZero()
+                || pickupTtl.compareTo(Duration.ofHours(12)) > 0 || vehicleFreshness.isNegative() || vehicleFreshness.isZero()
                 || vehicleLastKnown.compareTo(vehicleFreshness) < 0) {
             throw new IllegalArgumentException("Invalid pickup lifetime configuration");
         }
@@ -84,6 +84,7 @@ class PickupService {
         pickup.participantHash = tokenService.hash(guestToken);
         pickup.inviteHash = null;
         pickup.status = Pickup.Status.ACTIVE;
+        pickup.lastVehicleActivityAt = clock.instant();
         return new PickupApi.Joined(pickup.participantId, guestToken, pickup.status.name());
     }
 
@@ -120,6 +121,8 @@ class PickupService {
         pickup.readiness = Pickup.Readiness.WAITING;
         pickup.readinessSequence = 0;
         pickup.status = Pickup.Status.INVITING;
+        pickup.arrivedAt = null;
+        pickup.lastVehicleActivityAt = null;
         // The disconnected passenger's browser must not be notified about the next passenger's pickup.
         arrivalPush.remove(pickup.id);
         // The previous passenger's view of the car must not carry over; the sequence stays monotonic.
@@ -143,6 +146,7 @@ class PickupService {
             throw error(410, "INVITE_EXPIRED", "참여 요청이 만료됐습니다. 새로 초대해주세요.");
         }
         pickup.status = Pickup.Status.ACTIVE;
+        pickup.lastVehicleActivityAt = clock.instant();
         return toPickupResponse(pickup, true);
     }
 
@@ -192,6 +196,7 @@ class PickupService {
                 && request.sourceTime().isBefore(pickup.vehicleSourceTime))) {
             throw error(409, "STALE_EVENT", "이전 차량 정보로 현재 상태를 덮을 수 없습니다.");
         }
+        if (request.sourceTime().plus(vehicleFreshness).isAfter(now)) pickup.lastVehicleActivityAt = now;
         pickup.vehicleSequence = request.sequence();
         pickup.vehicleLatitude = request.latitude();
         pickup.vehicleLongitude = request.longitude();
@@ -230,6 +235,7 @@ class PickupService {
     PickupApi.Snapshot arrivePickup(UUID id, String auth) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
+        if (pickup.status != Pickup.Status.ARRIVED) pickup.arrivedAt = clock.instant();
         pickup.status = Pickup.Status.ARRIVED;
         return toPickupResponse(pickup, true);
     }
@@ -294,8 +300,10 @@ class PickupService {
     }
 
     private Pickup locked(UUID id) {
-        return pickupRepository.findLockedById(id)
+        Pickup pickup = pickupRepository.findLockedById(id)
                 .orElseThrow(() -> error(404, "PICKUP_NOT_FOUND", "픽업을 찾을 수 없습니다."));
+        if (pickup.expireIfDue(clock.instant())) arrivalPush.remove(pickup.id);
+        return pickup;
     }
 
     private Pickup owner(UUID id, String auth) {

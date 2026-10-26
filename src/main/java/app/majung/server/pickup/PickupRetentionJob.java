@@ -21,7 +21,7 @@ class PickupRetentionJob {
     private final Duration retention;
 
     PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, ArrivalPushService arrivalPush, Clock clock,
-                       @Value("${majung.retention.period:PT24H}") Duration retention) {
+                       @Value("${majung.retention.period:P7D}") Duration retention) {
         this.pickupRepository = pickupRepository;
         this.rideRequests = rideRequests;
         this.arrivalPush = arrivalPush;
@@ -31,7 +31,7 @@ class PickupRetentionJob {
 
     @Transactional
     @Scheduled(fixedDelayString = "${majung.retention.cleanup-interval-ms:300000}",
-               initialDelayString = "${majung.retention.cleanup-interval-ms:300000}")
+               initialDelayString = "${majung.retention.initial-delay-ms:60000}")
     public int purgeExpiredPickups() {
         rideRequests.deleteRetainedBefore(clock.instant().minus(retention));
         arrivalPush.removeCreatedBefore(clock.instant().minus(retention));
