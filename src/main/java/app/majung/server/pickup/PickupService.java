@@ -279,6 +279,10 @@ class PickupService {
         return toVehicleResponse(pickup);
     }
 
+    PickupEventStreams.State streamState(UUID id, String auth) {
+        return new PickupEventStreams.State(getPickup(id, auth), getVehicle(id, auth));
+    }
+
     PickupApi.VehicleState getVehicle(UUID id, String auth) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);

@@ -22,7 +22,7 @@ class ApiErrorHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorResponse> handleApi(ApiException exception, HttpServletRequest request) {
-        return ResponseEntity.status(exception.status).body(new ErrorResponse(
+        return ResponseEntity.status(exception.status).contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(new ErrorResponse(
                 exception.code, exception.getMessage(), (String) request.getAttribute("requestId")));
     }
 
