@@ -81,6 +81,18 @@ class PickupEventsTest {
         }
     }
 
+    @Test void shutdownRejectsNewStreamsWithoutWaitingForTheirTimeout() throws Exception {
+        Pickup pickup = connected();
+        var streams = new PickupEventStreams();
+        PickupEventStreams.State state = new PickupEventStreams.State(org.mockito.Mockito.mock(PickupApi.Snapshot.class), org.mockito.Mockito.mock(PickupApi.VehicleState.class));
+        try {
+            streams.closing();
+            ApiException error = org.junit.jupiter.api.Assertions.assertThrows(ApiException.class,
+                    () -> streams.open(java.util.UUID.fromString(pickup.id), () -> state));
+            assertEquals(503, error.status);
+        } finally { streams.close(); }
+    }
+
     private String awaitLine(java.util.concurrent.BlockingQueue<String> lines, String prefix) throws Exception {
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(6);
         while (System.nanoTime() < until) {
