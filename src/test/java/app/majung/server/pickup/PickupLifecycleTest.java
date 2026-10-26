@@ -54,6 +54,15 @@ class PickupLifecycleTest {
         assertEquals(1,job.expireDuePickups());
         assertFalse(pushSubscriptions.existsById(scheduledSession.id));
     }
+    @Test void readinessReceiptDoesNotRenewVehicleActivity() {
+        Session session = active();
+        service.updateReadiness(session.id, session.guest, new PickupApi.ReadinessRequest(Pickup.Readiness.READY, 1));
+        clock.advance(Duration.ofMinutes(29));
+        var snapshot = service.getPickup(session.id, session.owner);
+        service.receiveReadiness(session.id, session.owner, new PickupApi.ReadinessReceipt(snapshot.participant().participantId(), 1));
+        clock.advance(Duration.ofMinutes(1));
+        assertEquals("EXPIRED", service.getPickup(session.id, session.owner).status());
+    }
     @Test void inactivityExpiresAtBoundaryAndPollingCannotKeepItAlive() {
         Session session=active(); var started=clock.instant(); vehicle(session,1);
         clock.advance(Duration.ofSeconds(1799));

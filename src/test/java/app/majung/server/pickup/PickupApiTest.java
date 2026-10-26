@@ -365,6 +365,35 @@ class PickupApiTest {
                 Map.of("inviteToken", session.invite(), "displayName", "열세글자이름입니다만너무길어")), 400, "INVALID_REQUEST");
     }
 
+    @Test
+    void vehicleReceiptsAreScopedToThePassengerAndNeverConfirmANewerSelection() throws Exception {
+        Session session = create();
+        Guest guest = join(session);
+        ready(session, guest, "READY", 1);
+        String path = session.path() + "/readiness-receipt";
+        Map<String, Object> first = Map.of("participantId", guest.id(), "sequence", 1);
+        assertError(call("PUT", path, guest.token(), first), 403, "FORBIDDEN");
+        assertError(call("PUT", path, session.owner(), Map.of("participantId", guest.id(), "sequence", 2)),
+                409, "READINESS_NOT_FOUND");
+        assertEquals(1, call("PUT", path, session.owner(), first).body().path("participant").path("readinessReceivedSequence").asInt());
+        assertEquals(200, call("PUT", path, session.owner(), first).status());
+        ready(session, guest, "PREPARING", 2);
+        JsonNode pending = call("GET", session.path(), guest.token(), null).body().path("participant");
+        assertEquals(2, pending.path("readinessSequence").asInt());
+        assertEquals(1, pending.path("readinessReceivedSequence").asInt());
+        call("PUT", path, session.owner(), Map.of("participantId", guest.id(), "sequence", 2));
+        assertEquals(2, call("PUT", path, session.owner(), first).body().path("participant").path("readinessReceivedSequence").asInt());
+        Response rotated = call("DELETE", session.path() + "/participant", session.owner(), null);
+        Response next = joinRequest(session, rotated.body().path("inviteToken").asText());
+        Guest replacement = new Guest(next.body().path("participantId").asText(), next.body().path("participantToken").asText());
+        ready(session, replacement, "READY", 1);
+        assertError(call("PUT", path, session.owner(), first), 409, "PARTICIPANT_CHANGED");
+        assertEquals(0, call("GET", session.path(), replacement.token(), null).body().path("participant").path("readinessReceivedSequence").asInt());
+        assertError(call("PUT", path, session.owner(), Map.of("participantId", replacement.id(), "sequence", 0)), 400, "INVALID_REQUEST");
+        call("POST", session.path() + "/cancellation", session.owner(), null);
+        assertError(call("PUT", path, session.owner(), Map.of("participantId", replacement.id(), "sequence", 1)), 410, "PICKUP_ENDED");
+    }
+
     private Session create() throws Exception {
         Response response = call("POST", "/api/v1/pickups", null,
                 Map.of("place", Map.of("label", "예시 만남 장소", "latitude", 37.0, "longitude", 127.0)));

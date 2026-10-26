@@ -45,3 +45,5 @@ JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 AP
 연결된 사람에게 차량에서 바로 보내는 초대는 [직접 초대 안내](docs/direct-invitation.md)를 참고한다.
 
 [픽업 자동 종료와 보관 기간](docs/pickup-lifecycle.md): 차량 정보 중단·도착 후 30분, 최대 12시간, 종료 후 7일 정리와 기존 DB 적용 방법.
+
+[준비 상태의 차량 수신 확인](docs/readiness-receipt.md)
