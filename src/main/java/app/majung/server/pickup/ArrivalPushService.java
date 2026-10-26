@@ -12,7 +12,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** "About three minutes away" web push, sent at most once per pickup. */
+/** "About three minutes away" web push, sent at most once per confirmed place version. */
 @Service
 class ArrivalPushService {
     private final ArrivalPushRepository repository;
@@ -40,18 +40,28 @@ class ArrivalPushService {
 
     String publicKey() { return transport.publicKey(); }
 
-    void subscribe(UUID pickupId, String endpoint) {
+    void subscribe(UUID pickupId, String endpoint, long placeVersion) {
         if (!transport.enabled()) {
             throw new ApiException(404, "PUSH_DISABLED", "이 서버에서는 도착 알림을 사용할 수 없습니다.");
         }
         String valid = PushEndpoint.validate(endpoint);
         ArrivalPush existing = repository.findById(pickupId).orElse(null);
         if (existing == null) {
-            repository.save(new ArrivalPush(pickupId, valid, clock.instant()));
+            ArrivalPush subscription = new ArrivalPush(pickupId, valid, clock.instant());
+            subscription.placeVersion = placeVersion;
+            repository.save(subscription);
         } else {
             // Re-subscribing (a new browser, a refreshed endpoint) never re-arms a notice that was already sent.
             existing.endpoint = valid;
+            if (existing.placeVersion != placeVersion) { existing.placeVersion = placeVersion; existing.notifiedAt = null; }
         }
+    }
+
+    void rearm(UUID pickupId, long placeVersion) {
+        repository.findById(pickupId).ifPresent(subscription -> {
+            subscription.placeVersion = placeVersion;
+            subscription.notifiedAt = null;
+        });
     }
 
     void remove(UUID pickupId) { repository.deleteByPickup(pickupId); }
@@ -59,20 +69,23 @@ class ArrivalPushService {
     int removeCreatedBefore(java.time.Instant cutoff) { return repository.deleteCreatedBefore(cutoff); }
 
     /** Called inside the telemetry update; the send itself happens after that transaction commits. */
-    void vehicleUpdated(UUID pickupId, Pickup.Status status, Long durationSeconds) {
+    void vehicleUpdated(UUID pickupId, Pickup.Status status, Long durationSeconds, long placeVersion) {
         if (!transport.enabled() || status != Pickup.Status.ACTIVE || durationSeconds == null
                 || durationSeconds > arrivalSeconds) {
             return;
         }
-        if (repository.claim(pickupId, clock.instant()) != 1) return;
+        if (repository.claim(pickupId, clock.instant(), placeVersion) != 1) return;
         String endpoint = repository.findById(pickupId).map(subscription -> subscription.endpoint).orElse(null);
         if (endpoint == null) return;
-        afterCommit(() -> executor.execute(() -> deliver(pickupId, endpoint)));
+        afterCommit(() -> executor.execute(() -> deliver(pickupId, endpoint, placeVersion)));
     }
 
-    private void deliver(UUID pickupId, String endpoint) {
+    private void deliver(UUID pickupId, String endpoint, long placeVersion) {
+        // Skip queued notices for a cancelled pickup, another browser or an earlier place version.
+        // A push already handed to the external provider cannot be recalled.
+        if (!repository.existsByPickupIdAndPlaceVersionAndEndpointAndNotifiedAtIsNotNull(pickupId, placeVersion, endpoint)) return;
         if (transport.send(endpoint) == PushTransport.Result.GONE) {
-            transactions.executeWithoutResult(status -> repository.deleteByPickup(pickupId));
+            transactions.executeWithoutResult(status -> repository.deleteGone(pickupId, placeVersion, endpoint));
         }
     }
 

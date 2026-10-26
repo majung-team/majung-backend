@@ -33,11 +33,21 @@ class PickupApi {
                        @Size(max = 12) String displayName) { }
     record ReadinessRequest(@NotNull Pickup.Readiness readiness, @Positive long sequence) { }
     record ReadinessReceipt(@NotNull UUID participantId, @Positive long sequence) { }
-    record VehicleInvalidation(@Positive long sequence) { }
+    record PlaceVersionRequest(@NotNull @Positive Long placeVersion) { }
+    record VehicleInvalidation(@Positive long sequence, @Positive Long placeVersion) {
+        VehicleInvalidation(long sequence) { this(sequence, null); }
+    }
+    record PlaceConfirmation(@NotNull UUID proposalId, @Positive long expectedPlaceVersion,
+                             @Valid @NotNull Place place, @NotNull @PositiveOrZero Long durationSeconds,
+                             @NotNull Instant sourceTime) { }
     record VehicleRequest(@NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
                           @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
                           @NotNull @PositiveOrZero Long durationSeconds,
-                          @NotNull Instant sourceTime, @Positive long sequence) { }
+                          @NotNull Instant sourceTime, @Positive long sequence, @Positive Long placeVersion) {
+        VehicleRequest(Double latitude, Double longitude, Long durationSeconds, Instant sourceTime, long sequence) {
+            this(latitude, longitude, durationSeconds, sourceTime, sequence, null);
+        }
+    }
     record Created(UUID pickupId, String driverToken, String inviteToken,
                    Instant inviteExpiresAt, Instant expiresAt) { }
     record Invitation(String inviteToken, Instant expiresAt) { }
@@ -46,12 +56,12 @@ class PickupApi {
     record Joined(UUID participantId, String participantToken, String status) { }
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
                        long readinessSequence, long readinessReceivedSequence) { }
-    record PlaceProposal(Place place, Pickup.Proposer proposedBy, Instant proposedAt) { }
+    record PlaceProposal(Place place, Pickup.Proposer proposedBy, Instant proposedAt, UUID proposalId) { }
     record Snapshot(UUID pickupId, String status, Place place, PlaceProposal placeProposal, Participant participant,
-                    Instant inviteExpiresAt, Instant expiresAt, Instant endedAt) { }
+                    Instant inviteExpiresAt, Instant expiresAt, Instant endedAt, long placeVersion) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
                         Instant sourceTime, Instant receivedAt, long sequence, long validForMillis,
-                        Long ageMillis) { }
+                        Long ageMillis, long placeVersion) { }
 
     private final PickupService pickupService;
     private final DeploymentPolicy deploymentPolicy;
@@ -112,6 +122,13 @@ class PickupApi {
         return pickupService.updateReadiness(id, auth, request);
     }
 
+    @PutMapping(value = "/{id}/place-confirmation", consumes = "application/json")
+    Snapshot confirmPlace(@PathVariable UUID id,
+                          @RequestHeader(value = "Authorization", required = false) String auth,
+                          @Valid @RequestBody PlaceConfirmation request) {
+        return pickupService.confirmPlace(id, auth, request);
+    }
+
     @PutMapping(value = "/{id}/readiness-receipt", consumes = "application/json")
     Snapshot receiveReadiness(@PathVariable UUID id,
                              @RequestHeader(value = "Authorization", required = false) String auth,
@@ -129,7 +146,7 @@ class PickupApi {
     VehicleState invalidateVehicle(@PathVariable UUID id,
                                   @RequestHeader(value = "Authorization", required = false) String auth,
                                   @Valid @RequestBody VehicleInvalidation request) {
-        return pickupService.invalidateVehicle(id, auth, request.sequence());
+        return pickupService.invalidateVehicle(id, auth, request.sequence(), request.placeVersion());
     }
 
     @GetMapping("/{id}/vehicle-state")
@@ -149,8 +166,9 @@ class PickupApi {
     }
 
     @PostMapping("/{id}/arrival")
-    Snapshot arrive(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
-        return pickupService.arrivePickup(id, auth);
+    Snapshot arrive(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth,
+                    @Valid @RequestBody(required = false) PlaceVersionRequest request) {
+        return pickupService.arrivePickup(id, auth, request == null ? null : request.placeVersion());
     }
 
     @PostMapping("/{id}/completion")
