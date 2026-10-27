@@ -1,51 +1,40 @@
 # majung-backend
 
-마중 서버 API 저장소다.
+**마중(Majung) 서비스의 Spring Boot 기반 REST API 및 실시간 데이터 동기화 백엔드 저장소입니다.**
 
-기존 majung 저장소의 server/ 커밋 이력을 추출했다. 기존 main의 동작을 옮긴 것으로, 새 기능명세의 모든 기능을 완료한 상태는 아니다.
+차량(Pleos Android Automotive)과 탑승자(모바일 웹) 사이에서 픽업 세션, 실시간 위치·ETA 전송, 탑승자의 준비 상태 및 장소 제안을 안전하고 신속하게 중계합니다.
 
-- 기획·진행 안내: https://github.com/majung-team/majung
-- 기준 명세: https://app.notion.com/p/4026da9ae26a805abd45c0ee5885ef2f
+- **서비스 통합 안내**: [majung 메인 저장소](https://github.com/majung-team/majung)
+- **운영 서버 주소**: https://majung.cloud
+- **기획 명세**: [팀 노션 페이지](https://app.notion.com/p/4026da9ae26a805abd45c0ee5885ef2f)
 
-## 실행
+## 실행 방법
 
-JDK 25로 `./gradlew test bootJar`를 실행한다. `./gradlew bootRun`으로 API를 127.0.0.1:8080에서 연다.
-웹은 majung-web에서 따로 실행한다. 서버 JAR는 인접 웹 디렉터리를 읽지 않는다.
-환경변수·deploy 프로필·스키마는 deploy/와 src/main/resources/를 확인한다.
+- **요구사항**: JDK 25 이상
+- **빌드 및 테스트**:
+  ```bash
+  ./gradlew test bootJar
+  ```
+- **로컬 실행**:
+  ```bash
+  ./gradlew bootRun
+  ```
+  기본적으로 `127.0.0.1:8080` 포트에서 API 서버가 시작됩니다.  
+  웹 프론트엔드는 `majung-web` 저장소에서 독립적으로 실행되며, 배포 환경에서는 리버스 프록시(Caddy)를 통해 동일 도메인의 `/api/` 경로로 라우팅됩니다.  
+  환경변수 및 설정 프로필은 `deploy/` 및 `src/main/resources/`를 참고해 주시기 바랍니다.
 
-## 차량 최초 등록
+## 핵심 기능 및 상세 문서
 
-[등록 코드 발급·차량 권한·개별 철회 안내](docs/vehicle-registration.md)를 확인한다. 관리 공통 키로 픽업을 만드는 방식은 차량별 등록 권한으로 교체했다. 기존 배포 DB에는 스키마 업그레이드와 관리자 환경변수 변경이 필요하다.
+- **[차량 최초 등록 및 권한 관리](docs/vehicle-registration.md)**: 등록 코드 발급, 차량별 개별 권한 인가 및 철회 절차
+- **[카카오 계정 연동 및 닉네임 검색](docs/account-connections.md)**: 소셜 로그인, 세션/CSRF 보안 및 사용자 간 연결 API
+- **[탑승자 픽업 요청 및 대기열](docs/ride-requests.md)**: QR 없는 탑승자 주도 요청, 다중 픽업 수락 및 순차 대기열 처리
+- **[차량 연결 상태 모니터링](docs/vehicle-state.md)**: 통신 지연(30초) 및 단절(2분) 시 상태 처리 기준
+- **[도착 임박 웹 푸시 알림](docs/arrival-push.md)**: 도착 3분 전 VAPID 기반 브라우저 푸시 알림 발송
+- **[장소 제안 및 변경](docs/place-proposal.md)**: 탑승자의 장소 변경 제안 및 확정 동기화
+- **[픽업 생명주기 및 데이터 정리](docs/pickup-lifecycle.md)**: 세션 자동 종료 및 보관 주기 정책
+- **[CI/CD 및 배포 자동화](docs/github-actions.md)**: GitHub Actions 기반 무중단 배포 및 자동 롤백 파이프라인
 
-## 협업
+## 협업 규칙
 
-`npm ci`로 커밋 검사 훅을 설치한다. 성모·승준 모두 기능별로 서버·웹·차량 변경을 함께 맡는다.
-각 저장소의 PR에서 관련 저장소 PR과 기능 번호를 연결한다. 다른 저장소의 준비가 필요하면 먼저 API 요청·응답을 합의한다.
-
-[개정 명세 대조와 작업 순서](docs/revised-plan.md)를 확인한다. 아직 구현하지 않은 기능과 현재 기준 동작을 구분해 적었다.
-
-[카카오 가입·닉네임 검색·연결 API](docs/account-connections.md): 서버 환경변수, 세션·CSRF, DB 업그레이드와 검증 범위.
-
-[차량 정보 끊김 표시용 응답](docs/vehicle-state.md): 30초 이후 마지막 위치·ETA와 경과 시간, 2분 이후 숨김.
-
-[탑승자 지도용 카카오맵 키](docs/kakao-map.md): 설정 응답, 서버 환경변수, 도메인 등록.
-
-[탑승자 자동 연결과 끊기](docs/auto-connect.md): 이름·승인 없는 연결, 운전자의 탑승자 끊기와 재초대.
-
-[도착 임박 웹 푸시](docs/arrival-push.md): 3분 전 알림 한 번, 구독 API, VAPID 키와 DB 적용.
-
-[장소 제안](docs/place-proposal.md): 탑승자·운전자의 장소 제안과 확정 장소 보존, DB 적용.
-
-## GitHub Actions
-
-[테스트·배포·복구 흐름](docs/github-actions.md)을 참고한다. main의 검사 결과물을 마중 서버로 배포하며, 실제 Actions 검증 전에는 자동 배포를 꺼둔다. 앱 인증정보는 서버에만 보관한다.
-
-## 탑승자가 먼저 보내는 요청
-
-차량 QR이나 기존 연결 없이 운전자를 검색해 장소와 함께 요청한다. 운전자는 여러 요청을 수락해 대기에 넣고 현재 픽업을 마친 뒤 차례대로 시작한다. [사용 방법과 현재 검증 범위](docs/ride-requests.md)를 참고한다. 새 흐름의 공개 배포 상태는 PR 반영과 구분한다.
-
-연결된 사람에게 차량에서 바로 보내는 초대는 [직접 초대 안내](docs/direct-invitation.md)를 참고한다.
-
-[픽업 자동 종료와 보관 기간](docs/pickup-lifecycle.md): 차량 정보 중단·도착 후 30분, 최대 12시간, 종료 후 7일 정리와 기존 DB 적용 방법.
-
-[준비 상태의 차량 수신 확인](docs/readiness-receipt.md)
+커밋 전 컨벤션 검사를 위해 `npm ci`를 실행하여 Git 훅을 설정합니다.  
+차량·웹·서버 간 API 변경이 필요한 경우, [개정 명세 대조 및 작업 순서](docs/revised-plan.md)를 바탕으로 인터페이스를 사전에 조율한 뒤 작업을 진행합니다.
