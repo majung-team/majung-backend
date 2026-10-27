@@ -140,10 +140,28 @@ class PickupApiTest {
         Session unused = create();
         Session connected = create();
         Guest guest = join(connected);
-        clock.advance(Duration.ofMinutes(15));
+        Session nearBoundary = create();
+        assertEquals(clock.instant().plus(Duration.ofMinutes(30)), Instant.parse(
+                call("GET", unused.path(), unused.owner(), null).body().path("inviteExpiresAt").asText()));
+        clock.advance(Duration.ofMinutes(30).minusSeconds(1));
+        assertEquals(200, call("PUT", connected.path() + "/vehicle-state", connected.owner(), Map.of(
+                "latitude", 37.01, "longitude", 127.01, "durationSeconds", 300,
+                "sourceTime", clock.instant().toString(), "sequence", 1)).status());
+        assertEquals(201, joinRequest(nearBoundary, nearBoundary.invite()).status());
+        clock.advance(Duration.ofSeconds(1));
         assertError(joinRequest(unused, unused.invite()), 410, "INVITE_UNAVAILABLE");
         assertEquals("INVITE_EXPIRED", call("GET", unused.path(), unused.owner(), null).body().path("status").asText());
         assertEquals("ACTIVE", call("GET", connected.path(), guest.token(), null).body().path("status").asText());
+    }
+
+    @Test
+    void lateRotationCannotExtendThePickupLifetime() throws Exception {
+        Session session = create();
+        Instant pickupEnd = Instant.parse(call("GET", session.path(), session.owner(), null).body().path("expiresAt").asText());
+        clock.advance(Duration.ofHours(11).plusMinutes(50));
+        Response rotated = call("POST", session.path() + "/invitations", session.owner(), null);
+        assertEquals(200, rotated.status());
+        assertEquals(pickupEnd, Instant.parse(rotated.body().path("expiresAt").asText()));
     }
 
     @Test
