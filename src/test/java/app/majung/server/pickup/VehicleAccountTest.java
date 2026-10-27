@@ -21,6 +21,8 @@ class VehicleAccountTest {
     @Autowired VehicleAccountService links;
     @Autowired VehicleRegistrationService vehicles;
     @Autowired MemberService members;
+    @Autowired VehiclePeopleService people;
+    @Autowired org.springframework.web.context.WebApplicationContext context;
     @Autowired PickupApiTest.MutableClock clock;
 
     @org.junit.jupiter.api.BeforeEach void resetClock() { clock.reset(); }
@@ -57,4 +59,41 @@ class VehicleAccountTest {
         assertEquals(410, assertThrows(ApiException.class, () -> links.confirm(vehicle, current.challengeId())).status);
         assertTrue(links.links(owner.id).isEmpty());
     }
+    @Test void vehiclePeopleUsesLinkedDriverAndPreservesRecipientApproval() throws Exception {
+        String vehicle=vehicle(); Member owner=member(); Member passenger=member(); Member stranger=member();
+        assertEquals(409,assertThrows(ApiException.class,()->people.search(vehicle,passenger.majungId,0)).status);
+        var challenge=links.issue(vehicle);
+        links.claim(owner.id,new VehicleAccountApi.Claim(challenge.challengeId(),challenge.code()));
+        links.confirm(vehicle,challenge.challengeId());
+        assertEquals(passenger.id,people.search(vehicle,passenger.majungId,0).get(0).memberId());
+        assertEquals(409,assertThrows(ApiException.class,()->people.request(vehicle,passenger.id,stranger.majungId)).status);
+        var requested=people.request(vehicle,passenger.id,owner.majungId);
+        assertEquals("PENDING",requested.status());
+        assertEquals(requested.connectionId(),people.request(vehicle,passenger.id,owner.majungId).connectionId());
+        assertEquals("OUTGOING",people.connections(vehicle,0).get(0).direction());
+        assertEquals(403,assertThrows(ApiException.class,()->people.change(vehicle,requested.connectionId(),"accept",owner.majungId)).status);
+        var other=members.request(passenger.id,stranger.id);
+        assertEquals(404,assertThrows(ApiException.class,()->people.change(vehicle,other.connectionId(),"accept",owner.majungId)).status);
+        members.change(passenger.id,requested.connectionId(),"accept");
+        assertEquals("ACCEPTED",people.connections(vehicle,0).get(0).status());
+        var incoming=members.request(stranger.id,owner.id);
+        assertEquals("ACCEPTED",people.change(vehicle,incoming.connectionId(),"accept",owner.majungId).status());
+        var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup(context)
+            .apply(org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity()).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/vehicles/people/search")
+            .param("query",passenger.majungId).header("Authorization",vehicle))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.items[0].memberId").value(passenger.id.toString()));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/vehicles/people/connections"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/vehicles/people/connections")
+            .header("Authorization",vehicle).contentType("application/json").content("{}"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest());
+        assertEquals(400,assertThrows(ApiException.class,()->people.request(vehicle,owner.id,owner.majungId)).status);
+        links.detachDevice(vehicle);
+        assertEquals(409,assertThrows(ApiException.class,()->people.connections(vehicle,0)).status);
+        vehicles.revoke(vehicles.current(vehicle).vehicleId());
+        assertEquals(403,assertThrows(ApiException.class,()->people.search(vehicle,"가상",0)).status);
+    }
+
 }
