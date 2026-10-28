@@ -50,7 +50,7 @@ DB 마이그레이션은 자동 실행하지 않는다. 스키마가 바뀌는 �
 
 2026년 10월 25일 [서버 수동 실행](https://github.com/majung-team/majung-backend/actions/runs/40154730036)에서 테스트·빌드, OIDC 인증, IAP SSH 전송, JAR 교체와 상태 확인을 통과했다. 첫 실행은 `compute.instances.getGuestAttributes` 권한 부족으로 실패했다. 해당 조회 권한을 마중 인스턴스에 추가한 뒤 deploy 작업만 재실행해 성공했다.
 
-공개 HTTPS에서 `/api/v1/health`의 `UP`과 실행 커밋 SHA 일치를 확인했다. 미등록 차량 요청은 401, 외부 관리자 경로는 404로 차단됐다. 카카오 로그인은 서버 설정상 꺼져 있으며 실제 사용자 로그인·연결 해제 콜백 검증은 별도 작업으로 남아 있다.
+공개 HTTPS에서 `/api/v1/health`의 `UP`과 실행 커밋 SHA 일치를 확인했다. 미등록 차량 요청은 401, 외부 관리자 경로는 404로 차단됐다. 이 첫 시험 당시 카카오 로그인은 꺼져 있었다. 이후 로그인은 운영에 반영됐다. 현재 상태는 [운영 현황](https://github.com/majung-team/majung/blob/main/docs/runtime-2026-10-28.md)을 본다.
 
 로컬에서는 서버 테스트·빌드, actionlint, 셸 구문 검사와 아카이브·체크섬·버전·실패 복구 시험을 실행했다. 실제 배포 중 장애를 발생시킨 복구 시험이나 실차 시험까지 통과한 것은 아니다. 자동 배포가 꺼져 있을 때 CD가 skipped인 것은 배포 성공을 의미하지 않는다.
 

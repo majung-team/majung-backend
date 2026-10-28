@@ -1,40 +1,45 @@
 # majung-backend
 
-**마중(Majung) 서비스의 Spring Boot 기반 REST API 및 실시간 데이터 동기화 백엔드 저장소입니다.**
+마중의 Spring Boot 서버다. 차량과 휴대전화 사이에서 계정·초대·픽업·장소·준비 상태를 관리한다.
+위치·ETA는 차량 SDK에서 받은 값을 검사해 제공하며 서버가 경로나 교통 상황을 계산하지 않는다.
 
-차량(Pleos Android Automotive)과 탑승자(모바일 웹) 사이에서 픽업 세션, 실시간 위치·ETA 전송, 탑승자의 준비 상태 및 장소 제안을 안전하고 신속하게 중계합니다.
+[전체 사용 안내](https://github.com/majung-team/majung/wiki) · [현재 개발·PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
 
-- **서비스 통합 안내**: [majung 메인 저장소](https://github.com/majung-team/majung)
-- **운영 서버 주소**: https://majung.cloud
-- **기획 명세**: [팀 노션 페이지](https://app.notion.com/p/4026da9ae26a805abd45c0ee5885ef2f)
+## 접속·실행
 
-## 실행 방법
+- 공개 웹·API: https://majung.cloud
+- 상태: https://majung.cloud/api/v1/health (`status`, 배포 `revision` 확인)
+- 요구 환경: JDK 25
 
-- **요구사항**: JDK 25 이상
-- **빌드 및 테스트**:
-  ```bash
-  ./gradlew test bootJar
-  ```
-- **로컬 실행**:
-  ```bash
-  ./gradlew bootRun
-  ```
-  기본적으로 `127.0.0.1:8080` 포트에서 API 서버가 시작됩니다.  
-  웹 프론트엔드는 `majung-web` 저장소에서 독립적으로 실행되며, 배포 환경에서는 리버스 프록시(Caddy)를 통해 동일 도메인의 `/api/` 경로로 라우팅됩니다.  
-  환경변수 및 설정 프로필은 `deploy/` 및 `src/main/resources/`를 참고해 주시기 바랍니다.
+```sh
+./gradlew test bootJar
+./gradlew bootRun
+```
 
-## 핵심 기능 및 상세 문서
+로컬 API는 `127.0.0.1:8080`이다. 웹은 별도 저장소에서 실행한다.
+운영에서는 Caddy가 같은 도메인의 `/api/`를 서버에 전달한다.
+키·DB 비밀번호·관리자 권한은 서버 설정에서 관리하며 저장소에 넣지 않는다.
+설정 예시는 `deploy/`와 `src/main/resources/`를 본다.
 
-- **[차량 최초 등록 및 권한 관리](docs/vehicle-registration.md)**: 등록 코드 발급, 차량별 개별 권한 인가 및 철회 절차
-- **[카카오 계정 연동 및 닉네임 검색](docs/account-connections.md)**: 소셜 로그인, 세션/CSRF 보안 및 사용자 간 연결 API
-- **[탑승자 픽업 요청 및 대기열](docs/ride-requests.md)**: QR 없는 탑승자 주도 요청, 다중 픽업 수락 및 순차 대기열 처리
-- **[차량 연결 상태 모니터링](docs/vehicle-state.md)**: 통신 지연(30초) 및 단절(2분) 시 상태 처리 기준
-- **[도착 임박 웹 푸시 알림](docs/arrival-push.md)**: 도착 3분 전 VAPID 기반 브라우저 푸시 알림 발송
-- **[장소 제안 및 변경](docs/place-proposal.md)**: 탑승자의 장소 변경 제안 및 확정 동기화
-- **[픽업 생명주기 및 데이터 정리](docs/pickup-lifecycle.md)**: 세션 자동 종료 및 보관 주기 정책
-- **[CI/CD 및 배포 자동화](docs/github-actions.md)**: GitHub Actions 기반 무중단 배포 및 자동 롤백 파이프라인
+## 기능·운영 문서
 
-## 협업 규칙
+| 문서 | 내용 |
+| --- | --- |
+| [차량 QR 최초 연결](docs/vehicle-enrollment.md) | 일반 운전자 시작 방법. 관리자 코드 입력 불필요 |
+| [차량 계정 연결](docs/vehicle-account-link.md) | 이미 등록한 차량의 운전자 계정 연결 |
+| [내부 등록·권한 철회](docs/vehicle-registration.md) | 관리자 코드·차량 권한 관리 |
+| [계정·사람 검색](docs/account-connections.md) | 로그인·닉네임·세션·사람 연결 |
+| [요청·대기열](docs/ride-requests.md) | 여러 요청 수락, 한 건씩 픽업 시작 |
+| [위치 최신성](docs/vehicle-state.md) | 자료 시각·유효 시간·끊김 처리 |
+| [도착 임박 푸시](docs/arrival-push.md) | 구독·VAPID·도착 임박 알림 |
+| [장소 제안](docs/place-proposal.md) | 제안·차량 경로 검증·장소 버전 확정 |
+| [자동 종료·파기](docs/pickup-lifecycle.md) | 종료 기준과 보관·파기 |
+| [Actions 배포](docs/github-actions.md) | 테스트 후 배포, 실패 시 이전 코드 복구 |
 
-커밋 전 컨벤션 검사를 위해 `npm ci`를 실행하여 Git 훅을 설정합니다.  
-차량·웹·서버 간 API 변경이 필요한 경우, [개정 명세 대조 및 작업 순서](docs/revised-plan.md)를 바탕으로 인터페이스를 사전에 조율한 뒤 작업을 진행합니다.
+SSE는 웹에 변경 신호를 보내고 웹이 현재 상태를 다시 조회한다.
+현재 서버 배포는 재시작 방식으로 짧은 중단이 가능하다. 블루그린·무중단 배포가 아니다.
+DB 변경은 백업·마이그레이션·권한을 먼저 확인하며 코드 복구가 DB 변경까지 되돌리지는 않는다.
+
+실제 휴대전화 전체 흐름·푸시 배너·LTE 전환·실차 검증은 별도다.
+현재 담당·남은 작업은 [개발 기준](docs/revised-plan.md)을 본다.
+커밋 검사 훅은 `npm ci`로 설치하며 [기여 규칙](CONTRIBUTING.md)을 따른다.
