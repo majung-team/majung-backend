@@ -40,8 +40,9 @@ Spring Session 자체의 만료 세션 정리는 두 서버에서 실행할 수 
 4. root 소유 `/opt/majung/slots/blue`, `green`을 만들고 현재 검증된 JAR를 blue/server.jar에 복사한다.
    JAR는 root 소유 644, 디렉터리는 755로 둔다. 환경변수는 기존 root 전용 server.env를 사용한다.
 5. 정기 작업 파일을 `standalone`으로 두고 blue를 시작한다. 내부 health의 버전과 슬롯을 확인한다.
-6. Caddy의 API reverse_proxy 한 줄을 `import /etc/caddy/majung-upstream.caddy`로 바꾼다.
-   해당 파일은 `reverse_proxy 127.0.0.1:8081` 한 줄이다. validate 후 reload하고 공개 health를 확인한다.
+6. Caddy의 API reverse_proxy 블록 전체를 `import /etc/caddy/majung-upstream.caddy`로 바꾼다.
+   해당 파일은 8081 대상의 reverse_proxy 블록이며 기존 연결·응답 시간 제한을 유지한다.
+   validate 후 reload하고 공개 health를 확인한다.
 7. active-slot을 blue로 기록하고 `active-backend.json`에 active·revision을 저장한다.
    기존 majung.service를 종료하고 비활성화한다. blue 서비스는 재부팅 시 시작하도록 활성화한다.
 8. root 소유 설치 프로그램을 현재 `deploy/release.py`로 교체한다.

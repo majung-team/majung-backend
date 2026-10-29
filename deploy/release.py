@@ -102,6 +102,16 @@ def atomic_text(path, value):
         temporary.unlink(missing_ok=True)
 
 
+def upstream_config(slot):
+    port = SLOT_PORTS[slot]
+    return (f'reverse_proxy 127.0.0.1:{port} {{\n'
+            '    transport http {\n'
+            '        dial_timeout 3s\n'
+            '        response_header_timeout 10s\n'
+            '    }\n'
+            '}\n')
+
+
 def publish_blue_green(revision, data):
     verify_jar(data, revision)
     state = json.loads(SLOT_STATE.read_text())
@@ -133,7 +143,7 @@ def publish_blue_green(revision, data):
         if not probe(f'http://127.0.0.1:{SLOT_PORTS[candidate]}/api/v1/health', revision, expected_slot=candidate):
             raise RuntimeError('Candidate did not become healthy')
         run('systemctl', 'enable', f'majung@{candidate}.service')
-        atomic_text(UPSTREAM, f'reverse_proxy 127.0.0.1:{SLOT_PORTS[candidate]}\n')
+        atomic_text(UPSTREAM, upstream_config(candidate))
         route_changed = True
         run('caddy', 'validate', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile')
         run('systemctl', 'reload', 'caddy')
