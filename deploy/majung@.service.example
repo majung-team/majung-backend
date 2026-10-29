@@ -10,6 +10,7 @@ Group=majung
 WorkingDirectory=/opt/majung
 EnvironmentFile=/etc/majung/server.env
 ExecStart=/usr/local/libexec/majung-slot %i
+SuccessExitStatus=143
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
