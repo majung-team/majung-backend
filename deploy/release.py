@@ -22,7 +22,7 @@ import zipfile
 RELEASE_ROOT = pathlib.Path('/var/lib/majung-deploy/releases')
 TARGETS = {'backend': pathlib.Path('/opt/majung/majung-server.jar'), 'web': pathlib.Path('/srv/majung/web')}
 
-WEB_FILES = {'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js', 'push.js', 'proposal.js', 'stream.js', 'sw.js', 'manifest.webmanifest',
+WEB_FILES = {'privacy.html', 'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js', 'push.js', 'proposal.js', 'stream.js', 'sw.js', 'manifest.webmanifest',
              'account.html', 'account.css', 'account.js', 'account-api.js',
              'favicon.svg', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'}
 
