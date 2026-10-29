@@ -10,6 +10,7 @@ Group=majung
 WorkingDirectory=/opt/majung
 EnvironmentFile=/etc/majung/server.env
 ExecStart=/usr/bin/java -jar /opt/majung/majung-server.jar
+SuccessExitStatus=143
 Restart=on-failure
 RestartSec=5
 UMask=0077
