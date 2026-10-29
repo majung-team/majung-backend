@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class HealthApi {
-    record Health(String status, String revision) { }
+    record Health(String status, String revision, String slot) { }
     private final JdbcTemplate database;
     private final String revision;
     HealthApi(JdbcTemplate database) {
@@ -28,7 +28,11 @@ class HealthApi {
     Health health() {
         try {
             if (!Integer.valueOf(1).equals(database.queryForObject("SELECT 1", Integer.class))) throw new IllegalStateException();
-            return new Health("UP", revision);
+            if (!Integer.valueOf(0).equals(database.queryForObject(
+                    "SELECT COUNT(*) FROM SPRING_SESSION WHERE 1=0", Integer.class))) throw new IllegalStateException();
+            String slot = System.getenv("MAJUNG_SLOT");
+            if (!"blue".equals(slot) && !"green".equals(slot)) slot = "standalone";
+            return new Health("UP", revision, slot);
         } catch (RuntimeException failure) {
             throw new ApiException(503, "SERVICE_UNAVAILABLE", "서버 상태를 확인하고 있어요. 잠시 후 다시 시도해주세요.");
         }

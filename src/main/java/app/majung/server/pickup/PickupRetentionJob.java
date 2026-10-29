@@ -33,6 +33,7 @@ class PickupRetentionJob {
     @Scheduled(fixedDelayString = "${majung.retention.cleanup-interval-ms:300000}",
                initialDelayString = "${majung.retention.initial-delay-ms:60000}")
     public int purgeExpiredPickups() {
+        if (!ActiveDeploymentJobs.allowed()) return 0;
         rideRequests.deleteRetainedBefore(clock.instant().minus(retention));
         arrivalPush.removeCreatedBefore(clock.instant().minus(retention));
         int deleted = pickupRepository.deleteRetainedBefore(clock.instant().minus(retention));

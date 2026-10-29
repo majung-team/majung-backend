@@ -131,7 +131,9 @@ class VehicleAccountService {
         challenges.deleteById(vehicle.id);
     }
     @Scheduled(fixedDelay = 60000) @Transactional
-    void purgeExpired() { challenges.deleteExpired(clock.instant()); }
+    void purgeExpired() {
+        if (ActiveDeploymentJobs.allowed()) challenges.deleteExpired(clock.instant());
+    }
 
     private Member readyMember(UUID id) {
         Member member = members.lockById(id).orElseThrow(() -> new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요."));

@@ -125,7 +125,9 @@ class VehicleEnrollmentService {
                 member == null ? null : member.majungId,enrollment.expiresAt);
     }
     @Scheduled(fixedDelay=60000)
-    void purgeExpired() { enrollments.deleteExpired(clock.instant().minus(Duration.ofHours(1))); }
+    void purgeExpired() {
+        if (ActiveDeploymentJobs.allowed()) enrollments.deleteExpired(clock.instant().minus(Duration.ofHours(1)));
+    }
     private static ApiException unavailable() {
         return new ApiException(410,"ENROLLMENT_UNAVAILABLE","연결 요청이 만료되었거나 사용할 수 없어요. 차량에서 새 QR을 만들어주세요.");
     }
