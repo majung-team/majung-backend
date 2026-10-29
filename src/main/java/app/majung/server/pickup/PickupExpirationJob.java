@@ -23,6 +23,7 @@ class PickupExpirationJob {
     }
     @Scheduled(fixedDelayString = "${majung.expiration.interval-ms:60000}", initialDelayString = "${majung.expiration.interval-ms:60000}")
     int expireDuePickups() {
+        if (!ActiveDeploymentJobs.allowed()) return 0;
         int expired = 0;
         java.util.UUID after = null;
         for (;;) {

@@ -21,6 +21,12 @@ import zipfile
 
 RELEASE_ROOT = pathlib.Path('/var/lib/majung-deploy/releases')
 TARGETS = {'backend': pathlib.Path('/opt/majung/majung-server.jar'), 'web': pathlib.Path('/srv/majung/web')}
+SLOT_ROOT = pathlib.Path('/opt/majung/slots')
+SLOT_STATE = pathlib.Path('/var/lib/majung-deploy/active-backend.json')
+ACTIVE_SLOT = pathlib.Path('/etc/majung/active-slot')
+UPSTREAM = pathlib.Path('/etc/caddy/majung-upstream.caddy')
+SLOT_PORTS = {'blue': 8081, 'green': 8082}
+DRAIN_SECONDS = 20
 
 WEB_FILES = {'privacy.html', 'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js', 'push.js', 'proposal.js', 'stream.js', 'sw.js', 'manifest.webmanifest',
              'account.html', 'account.css', 'account.js', 'account-api.js',
@@ -60,14 +66,16 @@ def verify_jar(data, revision):
             raise ValueError('Not a Spring Boot executable JAR')
 
 
-def probe(url, expected_revision=None, attempts=30):
+def probe(url, expected_revision=None, attempts=30, expected_slot=None):
     for _ in range(attempts):
         try:
             with urllib.request.urlopen(url, timeout=2) as response:
                 body = response.read(65536)
                 if response.status == 200:
-                    if expected_revision is None or json.loads(body).get('revision') == expected_revision:
-                        return True
+                    if expected_revision is None and expected_slot is None: return True
+                    state = json.loads(body)
+                    if (expected_revision is None or state.get('revision') == expected_revision) and (
+                            expected_slot is None or state.get('slot') == expected_slot): return True
         except Exception:
             pass
         time.sleep(1)
@@ -79,7 +87,85 @@ def run(*args):
     subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
 
 
+def atomic_text(path, value):
+    if path.is_symlink(): raise ValueError('Deployment state must not be a symlink')
+    descriptor, name = tempfile.mkstemp(prefix='.majung-', dir=path.parent)
+    temporary = pathlib.Path(name)
+    try:
+        with os.fdopen(descriptor, 'w') as output:
+            output.write(value)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.chmod(0o644)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def publish_blue_green(revision, data):
+    verify_jar(data, revision)
+    state = json.loads(SLOT_STATE.read_text())
+    active = state.get('active')
+    if active not in SLOT_PORTS or not re.fullmatch('[0-9a-f]{40}', state.get('revision', '')):
+        raise ValueError('Invalid active backend state')
+    candidate = 'green' if active == 'blue' else 'blue'
+    directory = SLOT_ROOT / candidate
+    if not directory.is_dir() or directory.is_symlink(): raise ValueError('Slot is not prepared')
+    previous_route = UPSTREAM.read_text()
+    previous_slot = ACTIVE_SLOT.read_text()
+    previous_state = SLOT_STATE.read_text()
+    if previous_slot.strip() != active: raise ValueError('Active slot state disagrees')
+    route_changed = False
+    try:
+        run('systemctl', 'stop', f'majung@{candidate}.service')
+        descriptor, name = tempfile.mkstemp(prefix='server-', suffix='.jar', dir=directory)
+        staged = pathlib.Path(name)
+        try:
+            with os.fdopen(descriptor, 'wb') as output:
+                output.write(data)
+                output.flush()
+                os.fsync(output.fileno())
+            staged.chmod(0o644)
+            staged.replace(directory / 'server.jar')
+        finally:
+            staged.unlink(missing_ok=True)
+        run('systemctl', 'start', f'majung@{candidate}.service')
+        if not probe(f'http://127.0.0.1:{SLOT_PORTS[candidate]}/api/v1/health', revision, expected_slot=candidate):
+            raise RuntimeError('Candidate did not become healthy')
+        run('systemctl', 'enable', f'majung@{candidate}.service')
+        atomic_text(UPSTREAM, f'reverse_proxy 127.0.0.1:{SLOT_PORTS[candidate]}\n')
+        route_changed = True
+        run('caddy', 'validate', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile')
+        run('systemctl', 'reload', 'caddy')
+        atomic_text(ACTIVE_SLOT, candidate + '\n')
+        if not probe('https://majung.cloud/api/v1/health', revision, expected_slot=candidate):
+            raise RuntimeError('Public candidate health check failed')
+        atomic_text(SLOT_STATE, json.dumps({'active': candidate, 'revision': revision}) + '\n')
+    except BaseException:
+        if route_changed:
+            atomic_text(UPSTREAM, previous_route)
+            atomic_text(ACTIVE_SLOT, previous_slot)
+            atomic_text(SLOT_STATE, previous_state)
+            run('systemctl', 'reload', 'caddy')
+            if not probe('https://majung.cloud/api/v1/health', state['revision'], expected_slot=active):
+                raise RuntimeError('Previous backend recovery check failed') from None
+        run('systemctl', 'disable', f'majung@{candidate}.service')
+        run('systemctl', 'stop', f'majung@{candidate}.service')
+        raise RuntimeError('Candidate rejected; previous backend remains selected') from None
+    time.sleep(DRAIN_SECONDS)
+    drained = True
+    try:
+        run('systemctl', 'disable', f'majung@{active}.service')
+        run('systemctl', 'stop', f'majung@{active}.service')
+    except Exception:
+        drained = False
+    print(json.dumps({'component': 'backend', 'revision': revision, 'status': 'deployed',
+                      'slot': candidate, 'previousStopped': drained}))
+
+
 def publish(kind, revision, data, policy):
+    if kind == 'backend' and policy.get('backend_mode') == 'blue-green':
+        return publish_blue_green(revision, data)
     base = RELEASE_ROOT
     base.mkdir(parents=True, exist_ok=True, mode=0o755)
     with tempfile.TemporaryDirectory(prefix=kind + '-', dir=base) as temporary:

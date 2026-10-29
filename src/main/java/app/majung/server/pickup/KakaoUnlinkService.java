@@ -76,6 +76,7 @@ class KakaoUnlinkService {
 
     @Scheduled(fixedDelayString = "${majung.login.unlink-cleanup-interval-ms:5000}", initialDelay = 5000)
     void cleanup() {
+        if (!ActiveDeploymentJobs.allowed()) return;
         if (!cleanupEnabled) return;
         for (KakaoUnlink event : unlinkRepository.findAll(PageRequest.of(0, 20))) {
             try { cleanupOne(event.providerSubject); }
