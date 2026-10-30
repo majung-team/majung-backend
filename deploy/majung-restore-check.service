@@ -1,0 +1,11 @@
+[Unit]
+Description=Restore latest Majung backup into a temporary database
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/majung-operations restore
+TimeoutStartSec=300
+UMask=0077
+Nice=10
+MemoryMax=512M
