@@ -1,37 +1,365 @@
-# 차량 정보 끊김 표시용 응답
 
-기능: 3.4 끊김 표시. 탑승자 웹이 오래된 차량 정보를 흐리게 보여주고 ETA 카운트다운을 이어가도록 응답을 바꿨다.
+# 차량 위치·ETA 최신성 및 연결 끊김 처리
 
-## 응답 형식
+마중 백엔드는 차량에서 전달한 위치와 예상 도착 시간(ETA)의 최신성을 판단하고, 탑승자 웹에 현재 정보의 유효 상태를 제공한다.
 
-`GET /api/v1/pickups/{id}/vehicle-state`, `PUT` 같은 경로의 응답과 `GET /api/v1/ride-requests/{id}/tracking`의 `vehicle`에 같은 형식을 쓴다.
+차량 정보가 일정 시간 갱신되지 않으면 즉시 삭제하는 대신 제한된 시간 동안 마지막 정보를 제공한다. 웹은 이를 최신 정보와 구분해 표시한다.
 
-| 필드 | 설명 |
-| --- | --- |
-| `freshness` | `FRESH`: 30초 이내 정보 · `STALE`: 30초 초과 · `WAITING`: 정보 없음 또는 SDK 해제로 삭제 |
-| `latitude`·`longitude`·`durationSeconds` | `FRESH`와 2분 이내 `STALE`에서만 내려준다. 2분이 지나면 null |
-| `ageMillis` | 서버 시각 기준 정보의 경과 시간(ms). SDK 시각과 서버 수신 시각 중 이른 쪽을 기준으로 한다. `WAITING`이면 null |
-| `validForMillis` | `FRESH`로 남은 시간(ms). `STALE`·`WAITING`이면 0 |
-| `sourceTime`·`receivedAt`·`sequence` | 기존과 같다 |
+단, SDK 연결 해제 등으로 명시적으로 무효화된 정보는 마지막 값으로 다시 제공하지 않는다.
 
-`durationSeconds`는 `ageMillis`만큼 지난 시점의 값이다. 웹은 `durationSeconds - ageMillis`에서 시작해 카운트다운한다. 휴대전화 시계는 사용하지 않고 왕복 시간만큼 더 지난 것으로 본다.
+이 문서는 기능 3.4의 차량 정보 최신성 판단, API 응답 형식, ETA 표시 기준 및 검증 결과를 정리한다.
 
-## 정책값
+---
 
-| 설정 | 기본값 | 의미 |
+## 1. 차량 정보 최신성 상태
+
+서버는 차량 정보의 경과 시간에 따라 `FRESH`, `STALE`, `WAITING`을 구분한다.
+
+| 상태 | 의미 | 위치·ETA 제공 |
 | --- | --- | --- |
-| `majung.vehicle-freshness` | `PT30S` | `FRESH` 유지 시간 |
-| `majung.vehicle-last-known` | `PT2M` | 마지막 위치·ETA를 내려주는 최대 시간. `vehicle-freshness`보다 짧으면 서버가 시작하지 않는다 |
+| `FRESH` | 차량 정보가 최근 30초 이내에 수신·유효 | 제공 |
+| `STALE` | 마지막 정보가 30초를 초과하여 오래됨 | 2분 이내에만 제공 |
+| `WAITING` | 정보가 없거나 명시적으로 무효화됨 | 제공하지 않음 |
 
-30초·2분은 [SDK 콜백 간격 측정](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/sdk-callback-timing.md) 뒤 정한 시작값이다. 실차 지연 상한으로 검증한 값은 아니다.
+### FRESH
 
-## 바뀌지 않은 것
+현재 차량 정보가 최신성 기준을 만족하는 상태다.
 
-- SDK 연결 해제(`DELETE`)는 기존처럼 좌표·ETA를 지우고 `WAITING`을 반환한다. 단순 통신 지연과 구분한다.
-- 종료·취소·만료된 픽업은 차량 정보를 조회할 수 없다.
-- 대기 중인 탑승자에게 보여주는 현재 픽업 남은 시간(`currentPickupRemainingSeconds`)은 `FRESH`일 때만 내려준다.
-- 도착 표시는 `ARRIVED` 상태로만 한다. 카운트다운이 0이 돼도 도착으로 바꾸지 않는다.
+- 위치 좌표 제공
+- 목적지 ETA 제공
+- 정보 경과 시간 제공
+- 최신성 유지 시간 제공
 
-## 확인 범위
+서버는 SDK의 정보 시각과 서버 수신 시각을 함께 고려한다.
 
-`PickupApiTest`에서 30초 경과 시 `STALE`과 마지막 값, 121초 경과 시 좌표·ETA null과 `ageMillis`를 확인했다. 실제 통신 단절·실차는 확인하지 않았다.
+### STALE
+
+차량 정보가 최신성 기준을 초과한 상태다.
+
+마지막 정보가 2분 이내라면 기존 위치·ETA를 제한적으로 제공한다.
+
+웹에서는 오래된 정보임을 명확하게 표시하고, 최신 차량 위치처럼 표현하지 않는다.
+
+2분을 초과하면 위치와 ETA를 `null`로 제공한다.
+
+### WAITING
+
+다음 상황에서 사용하는 상태다.
+
+- 아직 차량 정보가 수신되지 않음
+- SDK 연결이 명시적으로 해제됨
+- 기존 위치·ETA가 삭제됨
+
+`WAITING` 상태에서는 이전 위치와 ETA를 다시 제공하지 않는다.
+
+---
+
+## 2. API 응답 형식
+
+다음 API에서 동일한 차량 정보 응답 형식을 사용한다.
+
+| Method | API | 용도 |
+| --- | --- | --- |
+| `GET` | `/api/v1/pickups/{id}/vehicle-state` | 차량 정보 조회 |
+| `PUT` | `/api/v1/pickups/{id}/vehicle-state` | 차량 정보 갱신 |
+| `GET` | `/api/v1/ride-requests/{id}/tracking` | 요청 기반 픽업의 차량 정보 조회 |
+
+요청 기반 픽업에서는 `tracking` 응답의 `vehicle` 필드에 해당 형식을 사용한다.
+
+API별 인증 및 접근 권한은 기존 픽업·차량 권한 정책을 따른다.
+
+### 주요 필드
+
+| 필드 | 의미 |
+| --- | --- |
+| `freshness` | `FRESH`, `STALE`, `WAITING` |
+| `latitude` | 마지막 유효 차량 위도 |
+| `longitude` | 마지막 유효 차량 경도 |
+| `durationSeconds` | SDK에서 수신한 목적지 ETA(초) |
+| `ageMillis` | 서버가 계산한 정보 경과 시간(ms) |
+| `validForMillis` | `FRESH` 상태로 남은 시간(ms) |
+| `sourceTime` | SDK 정보 시각 |
+| `receivedAt` | 서버 수신 시각 |
+| `sequence` | 차량 정보 전송 순번 |
+
+### 상태별 응답 기준
+
+| 필드 | `FRESH` | `STALE` · 2분 이내 | `STALE` · 2분 초과 | `WAITING` |
+| --- | --- | --- | --- | --- |
+| `latitude` | 제공 | 제공 | `null` | `null` |
+| `longitude` | 제공 | 제공 | `null` | `null` |
+| `durationSeconds` | 제공 | 제공 | `null` | `null` |
+| `ageMillis` | 경과 시간 | 경과 시간 | 경과 시간 | `null` |
+| `validForMillis` | 남은 시간 | `0` | `0` | `0` |
+
+`sourceTime`, `receivedAt`, `sequence`는 기존 응답 계약을 유지한다.
+
+정보의 최신성 상태와 위치·ETA 제공 여부는 서로 구분해서 처리한다.
+
+---
+
+## 3. 정보 경과 시간 계산
+
+서버는 SDK 정보 시각과 서버 수신 시각 중 이른 시각을 기준으로 정보 경과 시간을 계산한다.
+
+```text
+기준 시각 = min(sourceTime, receivedAt)
+
+ageMillis = 서버 현재 시각 - 기준 시각
+```
+
+`ageMillis`의 단위는 밀리초(ms)다.
+
+이 값은 탑승자 휴대전화의 시스템 시계가 아니라 서버 시각을 기준으로 산출한다.
+
+### 계산 목적
+
+SDK에서 오래된 정보를 다시 전달하더라도 서버에 방금 도착했다는 이유로 최신 데이터로 취급하지 않도록 한다.
+
+서버 수신 시각만 사용하면 실제 정보 생성 시각보다 차량 데이터가 새롭게 보일 수 있다.
+
+다만 SDK 정보 시각 자체가 실제 GPS 측정 시각을 보장하는 것은 아니다.
+
+---
+
+## 4. ETA 카운트다운
+
+웹은 서버가 반환한 `durationSeconds`와 `ageMillis`를 이용해 표시할 남은 시간을 계산한다.
+
+### 단위 구분
+
+- `durationSeconds`: 초
+- `ageMillis`: 밀리초
+
+두 값을 직접 빼지 않는다.
+
+### 계산 예시
+
+SDK에서 받은 ETA가 300초이고, 정보 경과 시간이 10,000ms인 경우:
+
+```text
+durationSeconds = 300
+ageMillis = 10000
+
+경과 시간 = 10초
+표시할 남은 시간 = 290초
+```
+
+기본 계산식:
+
+```text
+remainingSeconds =
+    max(0, durationSeconds - ageMillis / 1000)
+```
+
+웹은 이 값을 초기 카운트다운으로 사용하고 화면 표시 중 경과한 시간만큼 감소시킨다.
+
+서버 응답이 도착하기까지의 왕복 시간도 고려한다.
+
+### 브라우저 시각 사용
+
+휴대전화의 현재 날짜·시각을 서버 시각과 직접 비교하지 않는다.
+
+서버가 계산한 `ageMillis`와 클라이언트의 경과 시간을 기준으로 표시한다.
+
+### 중요한 제한
+
+ETA 카운트다운은 예상 시간의 표시일 뿐이다.
+
+**카운트다운이 0초가 됐다는 이유로 서버나 웹이 픽업을 `ARRIVED` 상태로 변경하지 않는다.**
+
+도착 여부는 별도의 픽업 상태 전이를 기준으로 판단한다.
+
+---
+
+## 5. 최신성 정책 설정
+
+서버는 다음 설정값을 사용한다.
+
+| 설정 | 기본값 | 설명 |
+| --- | --- | --- |
+| `majung.vehicle-freshness` | `PT30S` | 최신 차량 정보 유지 시간 |
+| `majung.vehicle-last-known` | `PT2M` | 마지막 위치·ETA 제공 최대 시간 |
+
+### FRESH 기준
+
+```properties
+majung.vehicle-freshness=PT30S
+```
+
+차량 정보가 최신성 유지 시간 안에 있다면 `FRESH`로 판단한다.
+
+기준을 초과하면 `STALE`로 전환한다.
+
+### 마지막 정보 제공 기준
+
+```properties
+majung.vehicle-last-known=PT2M
+```
+
+마지막 정보가 2분 이내라면 오래된 값임을 표시하는 조건으로 웹에 제공할 수 있다.
+
+2분을 초과하면 좌표와 ETA를 더 이상 제공하지 않는다.
+
+### 설정값 검증
+
+`vehicle-last-known`이 `vehicle-freshness`보다 짧으면 서버 기동을 거부한다.
+
+오래된 정보 표시 기간이 최신성 유지 시간보다 짧은 잘못된 설정을 방지한다.
+
+### 정책값의 근거
+
+30초와 2분은 Pleos SDK 콜백 간격 측정 이후 정한 초기 제품 정책이다.
+
+[SDK 콜백 간격 측정](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/sdk-callback-timing.md)
+
+해당 시험에서는 정상적인 5초 조회 간격을 확인했지만, 실제 차량과 네트워크 환경의 최대 지연 시간을 검증한 것은 아니다.
+
+따라서 30초·2분을 실차의 정상 지연 상한으로 해석하지 않는다.
+
+---
+
+## 6. 웹 표시 기준
+
+웹은 서버의 `freshness`와 차량 데이터 제공 여부에 따라 화면을 구분한다.
+
+| 상태 | 웹 표시 |
+| --- | --- |
+| `FRESH` | 차량 위치와 ETA 정상 표시 |
+| `STALE` · 2분 이내 | 마지막 위치·ETA를 오래된 정보로 구분해 표시 |
+| `STALE` · 2분 초과 | 위치·ETA 숨김, 연결 지연 안내 |
+| `WAITING` | 차량 정보 확인 또는 공유 중단 안내 |
+
+### STALE 표시
+
+`STALE` 상태에서 마지막 값이 제공되더라도 현재 차량의 실시간 위치로 표현하지 않는다.
+
+웹에서는 흐리게 표시하는 등 최신 정보와 시각적으로 구분한다.
+
+### 정보 제공 중단
+
+2분을 초과하면 서버가 위치와 ETA를 `null`로 반환한다.
+
+웹은 과거에 보관한 좌표·ETA를 별도로 복원해 계속 표시하지 않아야 한다.
+
+### WAITING 표시
+
+`WAITING`은 단순한 통신 지연과 구분한다.
+
+SDK 해제 등으로 기존 정보가 삭제된 경우에는 마지막 위치 표시 정책을 적용하지 않는다.
+
+---
+
+## 7. SDK 연결 해제와 정보 무효화
+
+차량에서 SDK 연결을 명시적으로 해제하는 경우 기존 `DELETE` 처리를 유지한다.
+
+### 처리 결과
+
+- 저장된 위도 삭제
+- 저장된 경도 삭제
+- 기존 ETA 삭제
+- 최신성 상태를 `WAITING`으로 전환
+
+### 통신 지연과의 차이
+
+| 상황 | 처리 |
+| --- | --- |
+| 차량 정보가 일정 시간 갱신되지 않음 | `STALE`로 전환 |
+| 마지막 정보가 2분을 초과함 | 좌표·ETA `null` |
+| SDK 연결을 명시적으로 해제함 | 즉시 정보 삭제 및 `WAITING` |
+| 픽업 종료·취소·만료 | 차량 정보 접근 차단 |
+
+명시적으로 무효화된 데이터를 다시 마지막 정보로 제공하지 않는다.
+
+---
+
+## 8. 픽업 상태와 접근 권한
+
+차량 정보의 최신성 상태와 픽업 진행 상태는 서로 다른 개념이다.
+
+### 종료된 픽업
+
+다음 상태의 픽업은 위치·ETA 접근을 허용하지 않는다.
+
+- `COMPLETED`
+- `CANCELLED`
+- `EXPIRED`
+
+`STALE` 정책은 종료된 픽업의 접근 권한을 연장하는 기능이 아니다.
+
+### 도착 상태
+
+차량이 실제로 도착한 것으로 처리된 경우에는 픽업의 `ARRIVED` 상태를 사용한다.
+
+ETA가 0초이거나 마지막 ETA가 만료됐다는 이유로 자동 도착 처리하지 않는다.
+
+### 대기 중인 탑승자
+
+대기열의 탑승자에게 제공하는 `currentPickupRemainingSeconds`는 현재 진행 중인 픽업 정보가 `FRESH`일 때만 제공한다.
+
+`STALE` 상태의 ETA는 대기자에게 제공하지 않는다.
+
+이 값은 현재 픽업의 남은 시간이며 대기자 자신의 도착 예정 시간이 아니다.
+
+다른 탑승자의 이름·장소·좌표는 공개하지 않는다.
+
+---
+
+## 9. 테스트 및 검증
+
+### 서버 자동화 테스트
+
+`PickupApiTest`에서 차량 정보의 최신성 경계와 응답 필드를 확인했다.
+
+| 시험 조건 | 확인 결과 |
+| --- | --- |
+| 30초 경과 | `STALE` 상태 |
+| 30초 경과 시 마지막 데이터 | 위치·ETA 제공 |
+| 121초 경과 | 위치·ETA `null` |
+| 121초 경과 시 `ageMillis` | 정보 경과 시간 유지 |
+
+이번 테스트는 시간을 제어한 서버 API 검증이다.
+
+정확한 경계 조건에서 응답이 예상 정책과 일치하는지 확인했다.
+
+### 확인하지 않은 범위
+
+- 실제 차량의 GPS 이동
+- 실제 네트워크 단절 및 복구
+- 실제 휴대전화의 장시간 카운트다운 표시
+- LTE·Wi-Fi 전환 중 최신성 처리
+- 실차 주행 중 SDK 콜백 지연
+- 실제 서버 부하 상황의 지연 분포
+
+따라서 테스트에서 확인한 정책 경계가 실제 통신 장애의 적정 판별 기준이라고 단정하지 않는다.
+
+---
+
+## 10. 관련 문서
+
+- [백엔드 README](../README.md)
+- [픽업 요청 및 대기열](ride-requests.md)
+- [픽업 자동 종료 및 보관 정책](pickup-lifecycle.md)
+- [장소 변경 제안](place-proposal.md)
+- [차량 SDK 콜백 간격 측정](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/sdk-callback-timing.md)
+- [차량 백그라운드 위치 공유](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/background-sharing.md)
+- [전체 서비스 Wiki](https://github.com/majung-team/majung/wiki)
+- [개발 현황 및 검증 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+
+---
+
+## 문서 관리 기준
+
+이 문서는 차량 위치·ETA의 최신성 판단과 끊김 표시용 API 응답 정책을 설명한다.
+
+다음 항목을 구분하여 관리한다.
+
+- `FRESH`, `STALE`, `WAITING`
+- 정보 경과 시간과 ETA 남은 시간
+- 통신 지연과 명시적 SDK 연결 해제
+- 현재 픽업의 ETA와 대기자의 시간 정보
+- 차량 정보 최신성과 픽업 접근 권한
+- 서버 단위 테스트와 실제 통신 단절 시험
+
+최신성 기준 또는 API 응답 형식을 변경할 경우 차량 앱·백엔드·모바일 웹의 처리 방식을 함께 확인한다.
