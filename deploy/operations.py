@@ -208,6 +208,8 @@ def main():
         raise RuntimeError('Only run as root on a Majung host')
     STATE.mkdir(mode=0o750, exist_ok=True)
     os.chown(STATE, 0, grp.getgrnam('majung').gr_gid)
+    # systemd UMask=0077 otherwise turns mkdir(0750) into 0700.
+    os.chmod(STATE, 0o750)
     with (STATE / (mode + '.lock')).open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
