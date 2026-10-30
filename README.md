@@ -17,6 +17,7 @@
 - [전체 사용 안내 Wiki](https://github.com/majung-team/majung/wiki)
 - [모바일 웹](https://majung.cloud)
 - [API 상태 확인](https://majung.cloud/api/v1/health)
+- [백업 복원·운영 점검](docs/operations-recovery.md)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
 
 ---

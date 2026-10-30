@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify Majung backup restoration weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 03:15:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
