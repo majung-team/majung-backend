@@ -1,5 +1,7 @@
 import importlib.util
 import pathlib
+import os
+import types
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -42,3 +44,18 @@ class OperationsTest(unittest.TestCase):
             self.assertRegex(created, r'^majung_restore_check_[0-9a-f]{16}$')
             self.assertEqual(['runuser', '-u', 'postgres', '--', 'dropdb', '--force', created], commands[-1])
             self.assertNotIn('majung', commands[-1])
+
+    def test_private_service_umask_keeps_state_readable_by_application_group(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = pathlib.Path(folder) / 'state'
+            original = os.umask(0o077)
+            try:
+                with patch.object(ops, 'STATE', state), patch.object(ops.os, 'geteuid', return_value=0), \
+                     patch.object(ops.os, 'chown'), patch.object(ops.grp, 'getgrnam', return_value=types.SimpleNamespace(gr_gid=1)), \
+                     patch.object(ops.socket, 'gethostname', return_value='majung-test'), \
+                     patch('sys.argv', ['operations', 'check']), patch.object(ops, 'check') as check:
+                    ops.main()
+                    check.assert_called_once()
+                self.assertEqual(0o750, state.stat().st_mode & 0o777)
+            finally:
+                os.umask(original)
