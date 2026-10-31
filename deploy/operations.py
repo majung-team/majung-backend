@@ -197,7 +197,7 @@ def summarize_metrics(text, previous):
     p95 = None
     if count:
         for upper, total in sorted(counters['buckets'].items(), key=lambda pair: float(pair[0])):
-            delta = max(0, total - old.get('buckets', {}).get(upper, total))
+            delta = max(0, total - old.get('buckets', {}).get(upper, 0))
             if delta >= count * 0.95:
                 p95 = float(upper) if upper != '+Inf' else 11.0
                 break
@@ -240,6 +240,10 @@ def check():
     details = {}
     try:
         backup_at = latest_backup().stat().st_mtime
+        offsite = json.loads((STATE / 'offsite.json').read_text()) if (STATE / 'offsite.json').exists() else {}
+        offsite_at = offsite.get('checkedAt', 0) if offsite.get('ok') is True else 0
+        if not 0 <= now - offsite_at <= 30 * 3600:
+            reasons.append('OFFSITE_BACKUP_OVERDUE')
         restored = json.loads((STATE / 'restore.json').read_text())
         restore_at = restored['checkedAt'] if restored.get('ok') is True else 0
         if (STATE / 'restore-failure.json').exists():
@@ -269,7 +273,7 @@ def check():
         performance.pop('metricCounters')
         reasons += metric_alerts(performance)
         reasons += assess(now, backup_at, restore_at, metrics['active'], metrics['stale'], metrics['overdue'], stale_since)
-        details = metrics | performance | {'staleSince': stale_since, 'backupAgeSeconds': int(now - backup_at), 'restoreAgeSeconds': now - restore_at}
+        details = metrics | performance | {'staleSince': stale_since, 'offsiteBackupAgeSeconds': now - offsite_at, 'backupAgeSeconds': int(now - backup_at), 'restoreAgeSeconds': now - restore_at}
     except Exception:
         reasons.append('HOST_CHECK_FAILED')
     result = {'checkedAt': now, 'ok': not reasons, 'reasons': reasons} | details

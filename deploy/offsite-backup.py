@@ -74,6 +74,11 @@ def main():
         restored.chmod(0o600)
         if digest(restored) != sha:
             raise RuntimeError('Downloaded backup differs')
+        run(['gcloud', 'compute', 'ssh', user + '@' + instance, '--project=' + project,
+             '--zone=' + zone, '--tunnel-through-iap', '--strict-host-key-checking=yes',
+             '--ssh-key-expire-after=10m', '--quiet',
+             '--command=sudo -n /usr/local/sbin/majung-export-backup verified ' + sha],
+            stdout=subprocess.DEVNULL)
         print(json.dumps({'uploaded': True, 'downloadVerified': True, 'bytes': archive.stat().st_size}))
 
 

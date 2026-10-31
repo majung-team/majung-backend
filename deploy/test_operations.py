@@ -82,3 +82,8 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(['API_ERROR_RATE_HIGH', 'API_LATENCY_HIGH', 'DATABASE_POOL_SATURATED'], ops.metric_alerts(second))
         reset = ops.summarize_metrics(sample(1, 0, 1).replace('seconds 100', 'seconds 200'), second)
         self.assertEqual(0, reset['intervalRequests'])
+
+    def test_new_histogram_boundaries_start_from_zero_in_same_process(self):
+        old = {'startedAt': 1, 'metricCounters': {'requests': 0, 'errors': 0, 'buckets': {}}}
+        result = ops.summarize_metrics('process_start_time_seconds 1\nhttp_server_requests_seconds_count{uri="/api/v1/config",status="200"} 25\nhttp_server_requests_seconds_bucket{uri="/api/v1/config",le="0.5"} 25', old)
+        self.assertEqual(0.5, result['p95UpperSeconds'])
