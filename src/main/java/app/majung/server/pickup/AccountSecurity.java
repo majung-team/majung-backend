@@ -1,6 +1,7 @@
 package app.majung.server.pickup;
 
 import java.util.List;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -51,7 +52,7 @@ class AccountSecurity {
 
     @Bean
     @Order(1)
-    SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members,
+    SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members, MeterRegistry metrics,
             ObjectProvider<OAuth2AuthorizedClientService> authorizedClients,
             @Value("${majung.login.enabled:false}") boolean enabled) throws Exception {
         http.securityMatcher("/api/v1/auth/**", "/api/v1/accounts/**", "/api/v1/connections/**", "/api/v1/vehicle-links/**", "/api/v1/ride-requests/**")
@@ -104,10 +105,12 @@ class AccountSecurity {
                     .successHandler((request, response, authentication) -> {
                         OAuth2AuthorizedClientService clients = authorizedClients.getIfAvailable();
                         if (clients != null) clients.removeAuthorizedClient("kakao", authentication.getName());
+                        metrics.counter("majung.login.results", "result", "success").increment();
                         response.setStatus(302);
                         response.setHeader("Location", "/account");
                     })
                     .failureHandler((request, response, exception) -> {
+                        metrics.counter("majung.login.results", "result", "failure").increment();
                         response.setStatus(302);
                         response.setHeader("Location", "/account?login=failed");
                     }));

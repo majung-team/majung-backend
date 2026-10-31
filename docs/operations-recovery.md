@@ -114,3 +114,18 @@ python3 deploy/configure-monitoring.py --project YOUR_PROJECT --email YOUR_OPERA
 4. 로그아웃 후 세션 삭제 및 같은 쿠키의 계정 접근 차단
 
 카카오 서버에서 새 인증을 발급받는 시험은 아니다. 외부 카카오·푸시는 비활성화하고, 시험 자료와 복원 데이터는 임시 DB 삭제 시 함께 제거한다. CLI는 웹 API로 노출되지 않으며 운영 DB 이름으로 실행하면 시작 전에 거부한다.
+
+## 응답 시간·오류율·DB 풀 지표
+
+Actuator의 Prometheus 지표는 blue `127.0.0.1:9081`, green `127.0.0.1:9082`에서만 읽는다. 기본 실행에서는 관리 HTTP 서버가 꺼져 있고 공개 서비스 포트에서는 `/actuator/prometheus`가 404다. 계정, 요청 본문, 토큰, 위치를 지표 태그에 넣지 않는다.
+
+호스트 점검은 활성 슬롯의 지표를 1분마다 읽는다. HTTP 집계는 `/api/`만 포함하며 health·SSE는 제외한다. p95는 히스토그램 구간의 상한 추정치이며, 서버 재시작 직후에는 이전 카운터와 차이를 계산하지 않는다.
+
+- 구간 요청 20건 이상에서 5xx 비율 5% 초과: `API_ERROR_RATE_HIGH`
+- 구간 요청 20건 이상에서 p95 상한 2초 초과: `API_LATENCY_HIGH`
+- DB 연결 풀을 모두 사용하면서 대기 요청 존재: `DATABASE_POOL_SATURATED`
+- OAuth 콜백 결과 10건 이상에서 실패 비율 50% 초과: `LOGIN_FAILURE_RATE_HIGH`
+
+이상이 지속되면 기존 operations HTTPS 점검과 Cloud Monitoring 경보로 연결된다. 요청이 적으면 응답 시간·오류율 경보는 발생하지 않는다. OAuth 결과는 서버 성공·실패 콜백만 세므로 사용자가 로그인 화면을 닫은 경우는 포함하지 않는다. 웹 푸시 수신이나 SDK 자체 상태를 이 지표로 판정하지 않는다.
+
+집계 결과는 `/var/lib/majung-operations/status.json`, 비교용 누적 카운터는 root 전용 `performance.json`에 남는다. Cloud Monitoring에 개별 API 경로·계정별 원본 시계열을 보내지는 않는다.

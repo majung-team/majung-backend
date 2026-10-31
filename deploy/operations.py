@@ -154,6 +154,73 @@ def restore():
     print(json.dumps(result))
 
 
+def summarize_metrics(text, previous):
+    # Only fixed metric names and aggregate values survive; no URI/user label is stored.
+    counters = {'requests': 0, 'errors': 0, 'loginSuccess': 0, 'loginFailure': 0, 'buckets': {}}
+    gauges = {'dbActive': 0, 'dbMax': 0, 'dbWaiting': 0, 'startedAt': 0}
+    for line in text.splitlines():
+        match = re.fullmatch(r'([a-zA-Z_][a-zA-Z0-9_]*)(?:\{(.*)\})? ([+0-9.eE-]+)', line)
+        if not match:
+            continue
+        name, labels, raw = match.groups()
+        labels = dict(re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)="([^"\\]*)"', labels or ''))
+        value = float(raw)
+        if name.startswith('http_server_requests_seconds_'):
+            uri = labels.get('uri', '')
+            # Health probes and long-lived SSE connections distort interactive API latency.
+            if not uri.startswith('/api/') or '/health' in uri or 'events' in uri or 'stream' in uri:
+                continue
+            if name.endswith('_count'):
+                counters['requests'] += value
+                if labels.get('status', '').startswith('5'):
+                    counters['errors'] += value
+            elif name.endswith('_bucket'):
+                upper = labels.get('le')
+                if upper:
+                    counters['buckets'][upper] = counters['buckets'].get(upper, 0) + value
+        elif name == 'majung_login_results_total':
+            key = {'success': 'loginSuccess', 'failure': 'loginFailure'}.get(labels.get('result'))
+            if key:
+                counters[key] += value
+        else:
+            key = {'hikaricp_connections_active': 'dbActive', 'hikaricp_connections_max': 'dbMax',
+                   'hikaricp_connections_pending': 'dbWaiting', 'process_start_time_seconds': 'startedAt'}.get(name)
+            if key:
+                gauges[key] += value
+    old = previous.get('metricCounters', {})
+    if previous.get('startedAt') != gauges['startedAt']:
+        old = counters
+    count = max(0, counters['requests'] - old.get('requests', counters['requests']))
+    errors = max(0, counters['errors'] - old.get('errors', counters['errors']))
+    attempts = sum(max(0, counters[k] - old.get(k, counters[k])) for k in ('loginSuccess', 'loginFailure'))
+    failures = max(0, counters['loginFailure'] - old.get('loginFailure', counters['loginFailure']))
+    p95 = None
+    if count:
+        for upper, total in sorted(counters['buckets'].items(), key=lambda pair: float(pair[0])):
+            delta = max(0, total - old.get('buckets', {}).get(upper, total))
+            if delta >= count * 0.95:
+                p95 = float(upper) if upper != '+Inf' else 11.0
+                break
+    return gauges | {'metricCounters': counters, 'intervalRequests': count,
+                     'interval5xxRatio': errors / count if count else 0,
+                     'p95UpperSeconds': p95, 'intervalLoginAttempts': attempts,
+                     'intervalLoginFailureRatio': failures / attempts if attempts else 0}
+
+
+def metric_alerts(metrics):
+    reasons = []
+    if metrics['intervalRequests'] >= 20:
+        if metrics['interval5xxRatio'] > 0.05:
+            reasons.append('API_ERROR_RATE_HIGH')
+        if metrics['p95UpperSeconds'] is not None and metrics['p95UpperSeconds'] > 2:
+            reasons.append('API_LATENCY_HIGH')
+    if metrics['dbWaiting'] > 0 and metrics['dbMax'] > 0 and metrics['dbActive'] >= metrics['dbMax']:
+        reasons.append('DATABASE_POOL_SATURATED')
+    if metrics['intervalLoginAttempts'] >= 10 and metrics['intervalLoginFailureRatio'] > 0.5:
+        reasons.append('LOGIN_FAILURE_RATE_HIGH')
+    return reasons
+
+
 def assess(now, backup_at, restore_at, active, stale, overdue, stale_since):
     reasons = []
     if now - backup_at > 30 * 3600 or backup_at > now + 5:
@@ -195,8 +262,14 @@ def check():
             FROM pickup"""))
         previous = json.loads((STATE / 'status.json').read_text()) if (STATE / 'status.json').exists() else {}
         stale_since = previous.get('staleSince', now) if metrics['active'] > 0 and metrics['stale'] == metrics['active'] else now
+        with urllib.request.urlopen('http://127.0.0.1:' + ('9081' if slot == 'blue' else '9082') + '/actuator/prometheus', timeout=5) as response:
+            previous_metrics = json.loads((STATE / 'performance.json').read_text()) if (STATE / 'performance.json').exists() else {}
+            performance = summarize_metrics(response.read(2_000_000).decode(), previous_metrics)
+        write_state('performance.json', performance)
+        performance.pop('metricCounters')
+        reasons += metric_alerts(performance)
         reasons += assess(now, backup_at, restore_at, metrics['active'], metrics['stale'], metrics['overdue'], stale_since)
-        details = metrics | {'staleSince': stale_since, 'backupAgeSeconds': int(now - backup_at), 'restoreAgeSeconds': now - restore_at}
+        details = metrics | performance | {'staleSince': stale_since, 'backupAgeSeconds': int(now - backup_at), 'restoreAgeSeconds': now - restore_at}
     except Exception:
         reasons.append('HOST_CHECK_FAILED')
     result = {'checkedAt': now, 'ok': not reasons, 'reasons': reasons} | details
