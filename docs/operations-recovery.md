@@ -38,7 +38,7 @@ sudo cat /var/lib/majung-operations/restore.json
 
 실패하면 `/var/lib/majung-operations/restore-server.log`와 journal을 VM 안에서 확인한다. 백업 원본·로그·행 데이터는 GitHub에 올리지 않는다. 실패 기록은 복원 재시험에 성공해야 지워진다.
 
-**남은 한계:** 백업이 같은 VM 디스크에 있으므로 VM 디스크 자체가 유실되면 보호하지 못한다. 별도 저장소 보관과 해당 사본의 복원은 아직 적용하지 않았다.
+**외부 보관 보완:** 10/31부터 비공개 Cloud Storage 복사와 다운로드 검증을 적용했고 해당 복사본의 실제 복원도 통과했다. 아래 외부 백업 절차를 따른다. VM·DB 자체의 이중화는 별개다.
 
 ## 장애 확인 순서
 
