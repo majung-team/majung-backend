@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Majung-only host checks. Backups and restored data never leave the VM."""
+"""Majung-only host checks. Restore drills use disposable databases."""
 import argparse
 import fcntl
 import grp

@@ -38,7 +38,7 @@ sudo cat /var/lib/majung-operations/restore.json
 
 실패하면 `/var/lib/majung-operations/restore-server.log`와 journal을 VM 안에서 확인한다. 백업 원본·로그·행 데이터는 GitHub에 올리지 않는다. 실패 기록은 복원 재시험에 성공해야 지워진다.
 
-**남은 한계:** 백업이 같은 VM 디스크에 있으므로 VM 디스크 자체가 유실되면 보호하지 못한다. 별도 저장소 보관과 해당 사본의 복원은 아직 적용하지 않았다.
+**외부 보관 보완:** 10/31부터 비공개 Cloud Storage 복사와 다운로드 검증을 적용했고 해당 복사본의 실제 복원도 통과했다. 아래 외부 백업 절차를 따른다. VM·DB 자체의 이중화는 별개다.
 
 ## 장애 확인 순서
 
@@ -129,3 +129,13 @@ Actuator의 Prometheus 지표는 blue `127.0.0.1:9081`, green `127.0.0.1:9082`�
 이상이 지속되면 기존 operations HTTPS 점검과 Cloud Monitoring 경보로 연결된다. 요청이 적으면 응답 시간·오류율 경보는 발생하지 않는다. OAuth 결과는 서버 성공·실패 콜백만 세므로 사용자가 로그인 화면을 닫은 경우는 포함하지 않는다. 웹 푸시 수신이나 SDK 자체 상태를 이 지표로 판정하지 않는다.
 
 집계 결과는 `/var/lib/majung-operations/status.json`, 비교용 누적 카운터는 root 전용 `performance.json`에 남는다. Cloud Monitoring에 개별 API 경로·계정별 원본 시계열을 보내지는 않는다.
+
+## 10월 31일 운영 확인 결과
+
+- 외부 백업 Actions [41158789207](https://github.com/majung-team/majung-backend/actions/runs/41158789207): 업로드·다운로드 해시 대조와 VM의 검증 시각 기록 성공
+- Cloud Storage 복사본 복원: 9개 핵심 테이블, 스키마, 서버 기동, 세션 인증·계정 조회·픽업 조회·로그아웃 후 차단 통과(25.68초). 정리 후 임시 DB 0개
+- 공개 `/actuator/prometheus`: 404. 활성 슬롯의 내부 관리 포트에서 HTTP 히스토그램·Hikari 지표 수집
+- 읽기 전용 config 요청 20건 모두 200. 해당 구간의 서버 처리 p95 히스토그램 상한 약 3.5ms, DB 풀 최대 10·대기 0. 네트워크 왕복이나 실제 픽업 체감 속도를 뜻하는 수치는 아님
+- 공개 `/api/v1/health/operations`: UP. 운영 DB를 복원본으로 덮어쓰거나 플리플리 서버를 재시작하지 않음
+
+첫 외부 백업 실행은 gcloud의 최초 SSH 키 생성 출력이 아카이브 앞에 섞여 업로드 전에 거부됐다. 키 생성 출력을 미리 분리한 PR #56 이후 새 runner에서 정상 복사·다운로드를 확인했다.
