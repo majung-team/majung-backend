@@ -92,7 +92,7 @@ python3 deploy/configure-monitoring.py --project YOUR_PROJECT --email YOUR_OPERA
 
 ## VM 외부 백업
 
-`Private database backup` Actions가 매일 09:30 KST에 실행된다. VM의 최근 PostgreSQL 백업을 SSH로 받아 마중 전용 비공개 Cloud Storage에 복사한다. 업로드한 세대를 다시 내려받아 SHA-256이 같은지 확인한다. 실패한 실행은 GitHub Actions에서 확인하며, 저장소 알림 설정에 따라 메일이 전달된다.
+`Private database backup` Actions가 매일 09:30 KST에 실행된다. VM의 최근 PostgreSQL 백업을 SSH로 받아 마중 전용 비공개 Cloud Storage에 복사한다. 업로드한 세대를 다시 내려받아 SHA-256이 같은지 확인하고 VM에 검증 완료 시각을 기록한다. 30시간 동안 성공 기록이 없으면 `OFFSITE_BACKUP_OVERDUE`로 운영 경보를 발생시킨다. 실패한 실행은 GitHub Actions에서 확인하며, 저장소 알림 설정에 따라 메일이 전달된다.
 
 - 버킷: `gs://majung-private-backups-305499581905`, 서울 리전
 - 공개 접근 차단 및 버킷 단위 IAM 적용. 백엔드 배포 계정에 이 버킷의 생성·조회만 허용

@@ -3,6 +3,7 @@
 import importlib.machinery
 import importlib.util
 import os
+import re
 import shutil
 import socket
 import sys
@@ -10,12 +11,17 @@ import time
 
 
 def main():
-    if os.geteuid() != 0 or socket.gethostname().split('.')[0] != 'majung-dev-01' or len(sys.argv) != 1:
+    if os.geteuid() != 0 or socket.gethostname().split('.')[0] != 'majung-dev-01' or len(sys.argv) not in (1, 3):
         raise RuntimeError('Unexpected backup export target')
     loader = importlib.machinery.SourceFileLoader('majung_operations', '/usr/local/sbin/majung-operations')
     spec = importlib.util.spec_from_loader(loader.name, loader)
     ops = importlib.util.module_from_spec(spec)
     loader.exec_module(ops)
+    if len(sys.argv) == 3:
+        if sys.argv[1] != 'verified' or not re.fullmatch('[0-9a-f]{64}', sys.argv[2]):
+            raise RuntimeError('Invalid verification receipt')
+        ops.write_state('offsite.json', {'checkedAt': int(time.time()), 'sha256': sys.argv[2], 'ok': True})
+        return
     archive = ops.latest_backup()
     if not 0 <= time.time() - archive.stat().st_mtime <= 30 * 3600:
         raise RuntimeError('Backup expired')
