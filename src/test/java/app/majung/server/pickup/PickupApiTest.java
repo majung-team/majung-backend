@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -410,6 +413,44 @@ class PickupApiTest {
         assertError(call("PUT", path, session.owner(), Map.of("participantId", replacement.id(), "sequence", 0)), 400, "INVALID_REQUEST");
         call("POST", session.path() + "/cancellation", session.owner(), null);
         assertError(call("PUT", path, session.owner(), Map.of("participantId", replacement.id(), "sequence", 1)), 410, "PICKUP_ENDED");
+    }
+
+    @Test
+    void exportsRawEtaAndFreshnessResponsesForDeployedWebCompatibility() throws Exception {
+        Session session = create();
+        Guest guest = join(session);
+        assertEquals(200, vehicle(session, 1, 180, clock.instant()).status());
+        clock.advance(Duration.ofSeconds(20));
+        Response aged = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        assertEquals(180, aged.body().path("durationSeconds").asInt());
+        assertEquals(20_000, aged.body().path("ageMillis").asLong());
+        assertEquals(10_000, aged.body().path("validForMillis").asLong());
+        List<Object> cases = new ArrayList<>();
+        cases.add(Map.of("name", "raw ETA after twenty seconds", "vehicle", aged.body(),
+                "expectedKind", "fresh", "expectedSeconds", 159));
+        clock.advance(Duration.ofSeconds(10));
+        Response stale = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        assertEquals("STALE", stale.body().path("freshness").asText());
+        cases.add(Map.of("name", "thirty second stale boundary", "vehicle", stale.body(),
+                "expectedKind", "stale", "expectedSeconds", 149));
+        clock.advance(Duration.ofSeconds(90));
+        Response lost = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        cases.add(Map.of("name", "two minute countdown limit", "vehicle", lost.body(),
+                "expectedKind", "lost"));
+        assertEquals(200, vehicle(session, 2, 600, clock.instant()).status());
+        Response traffic = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        cases.add(Map.of("name", "new congestion ETA replaces old countdown", "vehicle", traffic.body(),
+                "expectedKind", "fresh", "expectedSeconds", 599));
+        assertEquals(200, vehicle(session, 3, 120, clock.instant()).status());
+        Response faster = call("GET", session.path() + "/vehicle-state", guest.token(), null);
+        cases.add(Map.of("name", "shorter SDK ETA replaces previous estimate", "vehicle", faster.body(),
+                "expectedKind", "fresh", "expectedSeconds", 119));
+        clock.advance(Duration.ofMinutes(30));
+        assertEquals("EXPIRED", call("GET", session.path(), guest.token(), null).body().path("status").asText());
+        assertError(vehicle(session, 4, 90, clock.instant()), 410, "PICKUP_ENDED");
+        Path output = Path.of("build/contracts/eta-api-responses.json");
+        Files.createDirectories(output.getParent());
+        Files.writeString(output, json.writeValueAsString(Map.of("syntheticData", true, "cases", cases)));
     }
 
     private Session create() throws Exception {
