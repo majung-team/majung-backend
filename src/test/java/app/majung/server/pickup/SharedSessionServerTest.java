@@ -77,6 +77,7 @@ class SharedSessionServerTest {
                     .header("Cookie", cookie).GET().build(), HttpResponse.BodyHandlers.ofString());
             assertFalse(json.readTree(after.body()).path("authenticated").asBoolean());
             assertNull(firstRepository.findById(session.getId()));
+            RestoreVerification.verify(blue, uri(blue, "").toString());
         }
     }
 }

@@ -103,3 +103,14 @@ python3 deploy/configure-monitoring.py --project YOUR_PROJECT --email YOUR_OPERA
 - 호스트 이름뿐 아니라 GCP 인스턴스 ID를 대조. 플리플리 인스턴스는 대상이 아님
 
 수동 실행은 Actions → Private database backup → Run workflow에서 한다. 로컬 백업 생성과 복원 시험 타이머는 계속 별도로 동작한다. 외부 복사본의 해시 확인은 PostgreSQL 복원 시험을 대신하지 않는다.
+
+### 복원 DB의 세션·픽업 기능 확인
+
+복원 전용 CLI(`RestoreVerification`)는 `majung_restore_check_<임의 ID>` DB에서만 시작한다. 복원한 스키마에 합성 계정·로그인 세션·픽업을 추가하고 실제 HTTP 요청으로 다음을 확인한다.
+
+1. JDBC 세션을 읽어 로그인 상태 확인
+2. 같은 쿠키로 내 계정 조회
+3. 픽업 소유자 토큰으로 픽업 조회
+4. 로그아웃 후 세션 삭제 및 같은 쿠키의 계정 접근 차단
+
+카카오 서버에서 새 인증을 발급받는 시험은 아니다. 외부 카카오·푸시는 비활성화하고, 시험 자료와 복원 데이터는 임시 DB 삭제 시 함께 제거한다. CLI는 웹 API로 노출되지 않으며 운영 DB 이름으로 실행하면 시작 전에 거부한다.
