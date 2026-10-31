@@ -110,10 +110,12 @@ def restore():
         }
         # Invalid slot prevents application cleanup/unlink jobs. No OAuth or push provider is enabled.
         log_fd = os.open(STATE / 'restore-server.log', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        functional = STATE / 'restore-functional.json'
+        functional.unlink(missing_ok=True)
         with os.fdopen(log_fd, 'wb') as log:
             process = subprocess.Popen(['/usr/bin/java', '-Xms32m', '-Xmx192m', '-XX:MaxMetaspaceSize=160m',
-                '-jar', str(jar), '--server.address=127.0.0.1', '--server.port=18099',
-                '--spring.jpa.hibernate.ddl-auto=validate'],
+                '-Dloader.main=app.majung.server.pickup.RestoreVerification',
+                '-cp', str(jar), 'org.springframework.boot.loader.launch.PropertiesLauncher'],
                 env=child_env, stdout=log, stderr=log)
             healthy = False
             for _ in range(60):
@@ -122,8 +124,9 @@ def restore():
                 try:
                     with urllib.request.urlopen('http://127.0.0.1:18099/api/v1/health', timeout=2) as response:
                         healthy = json.load(response).get('status') == 'UP'
-                    if healthy:
+                    if healthy and functional.exists():
                         break
+                    healthy = False
                 except (OSError, ValueError):
                     pass
                 time.sleep(1)
@@ -131,6 +134,7 @@ def restore():
                 raise RuntimeError('Restored server health failed')
         result = {'ok': True, 'checkedAt': int(time.time()), 'tablesChecked': len(counts),
                   'rowCounts': counts, 'serverHealth': 'UP', 'schemaValidation': True,
+                  'functional': json.loads(functional.read_text()),
                   'seconds': round(time.monotonic() - start, 2)}
     finally:
         if process is not None and process.poll() is None:
