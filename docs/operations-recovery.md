@@ -89,3 +89,17 @@ python3 deploy/configure-monitoring.py --project YOUR_PROJECT --email YOUR_OPERA
 - 마중 전용 HTTPS 점검 2개와 이메일 알림 정책 1개를 Cloud Monitoring에 생성했다. 기존 플리플리 정책·채널은 수정하지 않았다.
 - 실제 장애를 유발하지 않았으므로 장애 발생부터 이메일 도착까지는 미확인이다.
 - systemd의 `UMask=0077`에서도 서버가 결과 파일을 읽도록 상태 폴더 권한을 0750으로 명시했다. 같은 umask를 적용한 재발 방지 테스트도 통과했다.
+
+## VM 외부 백업
+
+`Private database backup` Actions가 매일 09:30 KST에 실행된다. VM의 최근 PostgreSQL 백업을 SSH로 받아 마중 전용 비공개 Cloud Storage에 복사한다. 업로드한 세대를 다시 내려받아 SHA-256이 같은지 확인한다. 실패한 실행은 GitHub Actions에서 확인하며, 저장소 알림 설정에 따라 메일이 전달된다.
+
+- 버킷: `gs://majung-private-backups-305499581905`, 서울 리전
+- 공개 접근 차단 및 버킷 단위 IAM 적용. 백엔드 배포 계정에 이 버킷의 생성·조회만 허용
+- 14일 경과 후 삭제 정책. Cloud Storage 기본 soft delete 기간은 별도로 적용
+- 개인 키를 VM에 추가하지 않고 Actions의 단기 GCP 인증 사용
+- 임시 파일은 작업 전용 폴더에 0600 권한으로 저장하고 작업 종료 시 제거
+- 백업 파일은 GitHub 아티팩트·소스 저장소·로그에 올리지 않음
+- 호스트 이름뿐 아니라 GCP 인스턴스 ID를 대조. 플리플리 인스턴스는 대상이 아님
+
+수동 실행은 Actions → Private database backup → Run workflow에서 한다. 로컬 백업 생성과 복원 시험 타이머는 계속 별도로 동작한다. 외부 복사본의 해시 확인은 PostgreSQL 복원 시험을 대신하지 않는다.
