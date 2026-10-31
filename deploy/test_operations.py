@@ -59,3 +59,26 @@ class OperationsTest(unittest.TestCase):
                 self.assertEqual(0o750, state.stat().st_mode & 0o777)
             finally:
                 os.umask(original)
+
+
+class MetricsTest(unittest.TestCase):
+    def test_interval_error_ratio_latency_and_reset(self):
+        def sample(count, errors, bucket):
+            return '\n'.join([
+                'process_start_time_seconds 100',
+                'hikaricp_connections_active{pool="main"} 10',
+                'hikaricp_connections_max{pool="main"} 10',
+                'hikaricp_connections_pending{pool="main"} 1',
+                f'http_server_requests_seconds_count{{uri="/api/v1/pickups/{{id}}",status="200"}} {count}',
+                f'http_server_requests_seconds_count{{uri="/api/v1/pickups/{{id}}",status="503"}} {errors}',
+                f'http_server_requests_seconds_bucket{{uri="/api/v1/pickups/{{id}}",le="3.0"}} {bucket}',
+                'http_server_requests_seconds_count{uri="/api/v1/health",status="200"} 10000'])
+        first = ops.summarize_metrics(sample(100, 0, 100), {})
+        self.assertEqual(0, first['intervalRequests'])
+        second = ops.summarize_metrics(sample(120, 2, 122), first)
+        self.assertEqual(22, second['intervalRequests'])
+        self.assertAlmostEqual(2 / 22, second['interval5xxRatio'])
+        self.assertEqual(3, second['p95UpperSeconds'])
+        self.assertEqual(['API_ERROR_RATE_HIGH', 'API_LATENCY_HIGH', 'DATABASE_POOL_SATURATED'], ops.metric_alerts(second))
+        reset = ops.summarize_metrics(sample(1, 0, 1).replace('seconds 100', 'seconds 200'), second)
+        self.assertEqual(0, reset['intervalRequests'])
