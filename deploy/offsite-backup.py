@@ -38,6 +38,12 @@ def main():
         raise RuntimeError('Instance identity mismatch')
     ssh = pathlib.Path.home() / '.ssh'
     ssh.mkdir(mode=0o700, exist_ok=True)
+    # gcloud's first SSH key generation writes informational text to stdout.
+    # Generate it before opening the binary archive stream.
+    key = ssh / 'google_compute_engine'
+    if not key.exists():
+        run(['ssh-keygen', '-q', '-t', 'rsa', '-b', '3072', '-N', '', '-f', str(key)],
+            stdout=subprocess.DEVNULL)
     known = ssh / 'google_compute_known_hosts'
     known.write_text('compute.' + identity + ' ' + host_key + '\n')
     known.chmod(0o600)
