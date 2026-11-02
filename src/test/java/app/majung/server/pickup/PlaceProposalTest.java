@@ -107,11 +107,18 @@ class PlaceProposalTest {
                 Map.of("place", OTHER)).status());
     }
 
-    @Test void proposalIsDroppedWhenThePassengerIsDisconnectedOrThePickupEnds() throws Exception {
+    @Test void proposalIsDroppedWhenThePassengerIsDisconnectedOrThePickupArrivesOrEnds() throws Exception {
         Pickup pickup = connected();
         call("PUT", pickup.path() + "/place-proposal", pickup.guest, Map.of("place", OTHER));
         assertEquals(200, call("DELETE", pickup.path() + "/participant", pickup.owner, null).status());
         assertTrue(get(pickup, pickup.owner).path("placeProposal").isNull());
+        Pickup arrived = active();
+        call("PUT", arrived.path() + "/place-proposal", arrived.guest, Map.of("place", OTHER));
+        Response onArrival = call("POST", arrived.path() + "/arrival", arrived.owner, Map.of("placeVersion", 1));
+        assertEquals(200, onArrival.status());
+        assertTrue(onArrival.body().path("placeProposal").isNull());
+        assertTrue(get(arrived, arrived.guest).path("placeProposal").isNull());
+        assertEquals(409, call("PUT", arrived.path() + "/place-proposal", arrived.guest, Map.of("place", OTHER)).status());
         Pickup ended = connected();
         call("PUT", ended.path() + "/place-proposal", ended.guest, Map.of("place", OTHER));
         assertEquals(200, call("POST", ended.path() + "/cancellation", ended.owner, null).status());

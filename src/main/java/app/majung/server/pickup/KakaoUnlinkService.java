@@ -21,6 +21,7 @@ class KakaoUnlinkService {
     private final MemberConnectionRepository connectionRepository;
     private final RideRequestRepository rideRequests;
     private final PickupRepository pickups;
+    private final ArrivalPushService arrivalPush;
     private final VehicleAccountLinkRepository vehicleLinks;
     private final VehicleAccountChallengeRepository vehicleChallenges;
     private final TransactionTemplate transaction;
@@ -31,7 +32,8 @@ class KakaoUnlinkService {
 
     KakaoUnlinkService(KakaoUnlinkRepository unlinkRepository, MemberRepository memberRepository,
             MemberConnectionRepository connectionRepository, VehicleAccountLinkRepository vehicleLinks,
-            VehicleAccountChallengeRepository vehicleChallenges, RideRequestRepository rideRequests, PickupRepository pickups, PlatformTransactionManager transactions, Clock clock,
+            VehicleAccountChallengeRepository vehicleChallenges, RideRequestRepository rideRequests,
+            PickupRepository pickups, ArrivalPushService arrivalPush, PlatformTransactionManager transactions, Clock clock,
             @Value("${majung.login.kakao-admin-key:}") String adminKey,
             @Value("${majung.login.kakao-app-id:}") String appId,
             @Value("${majung.login.unlink-cleanup-enabled:true}") boolean cleanupEnabled) {
@@ -42,6 +44,7 @@ class KakaoUnlinkService {
         this.vehicleChallenges = vehicleChallenges;
         this.rideRequests = rideRequests;
         this.pickups = pickups;
+        this.arrivalPush = arrivalPush;
         this.transaction = new TransactionTemplate(transactions);
         this.transaction.setTimeout(2);
         this.clock = clock;
@@ -96,8 +99,9 @@ class KakaoUnlinkService {
                         if (request.pickupId != null) pickups.findLockedById(request.pickupId).ifPresent(pickup -> {
                             if (!pickup.isTerminal()) {
                                 pickup.status=Pickup.Status.CANCELLED; pickup.endedAt=clock.instant();
-                                pickup.inviteHash=null; pickup.clearVehicle();
+                                pickup.inviteHash=null; pickup.clearProposal(); pickup.clearVehicle();
                             }
+                            arrivalPush.remove(pickup.id);
                         });
                         rideRequests.delete(request);
                     }
