@@ -109,6 +109,24 @@ class PickupApiTest {
     }
 
     @Test
+    void quickMessageFromPassengerReflectedInSnapshot() throws Exception {
+        Session session = create();
+        Guest guest = join(session);
+        approve(session, guest);
+
+        Response response = call("POST", session.path() + "/quick-message", guest.token(),
+                Map.of("message", "지금 내려가요"));
+        assertEquals(200, response.status());
+        assertEquals("지금 내려가요", response.body().path("quickMessage").path("text").asText());
+        assertEquals("마중 차량", response.body().path("vehicleName").asText());
+
+        Response ownerView = call("GET", session.path(), session.owner(), null);
+        assertEquals("지금 내려가요", ownerView.body().path("quickMessage").path("text").asText());
+
+        assertError(call("POST", session.path() + "/quick-message", guest.token(), Map.of("message", "")), 400, "INVALID_REQUEST");
+    }
+
+    @Test
     void enforceRoleAndPickupBoundaries() throws Exception {
         Session session = create();
         Session other = create();

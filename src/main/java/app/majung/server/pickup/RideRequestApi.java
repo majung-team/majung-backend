@@ -49,6 +49,10 @@ class RideRequestApi {
     PickupApi.Snapshot readiness(Authentication auth, @PathVariable UUID id, @Valid @RequestBody PickupApi.ReadinessRequest body) {
         return service.readiness(AccountIdentity.requireMember(auth), id, body);
     }
+    @PostMapping("/api/v1/ride-requests/{id}/quick-message")
+    PickupApi.Snapshot quickMessage(Authentication auth, @PathVariable UUID id, @Valid @RequestBody PickupApi.QuickMessageRequest body) {
+        return service.quickMessage(AccountIdentity.requireMember(auth), id, body.message());
+    }
     @GetMapping("/api/v1/vehicles/connections")
     Contacts contacts(@RequestHeader(value="Authorization", required=false) String auth,
             @RequestParam(defaultValue="0") int page) { return new Contacts(service.contacts(auth, page)); }

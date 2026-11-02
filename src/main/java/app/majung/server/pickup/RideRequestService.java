@@ -221,6 +221,10 @@ class RideRequestService {
         RideRequest request=passengerActive(self,id);
         return pickupService.readinessForAccount(request.pickupId,input);
     }
+    PickupApi.Snapshot quickMessage(UUID self, UUID id, String message) {
+        RideRequest request = passengerActive(self, id);
+        return pickupService.sendQuickMessageForAccount(request.pickupId, message);
+    }
     private RideRequest passengerActive(UUID self,UUID id) {
         members.current(self); RideRequest request=requests.findById(id).orElseThrow(RideRequestService::notFound);
         if (!request.passengerId.equals(self)) throw notFound();
