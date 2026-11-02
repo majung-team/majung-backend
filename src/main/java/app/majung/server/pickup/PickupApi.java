@@ -57,8 +57,11 @@ class PickupApi {
     record Participant(UUID participantId, String displayName, Pickup.Readiness readiness,
                        long readinessSequence, long readinessReceivedSequence) { }
     record PlaceProposal(Place place, Pickup.Proposer proposedBy, Instant proposedAt, UUID proposalId) { }
+    record QuickMessage(String text, Instant sentAt) { }
+    record QuickMessageRequest(@NotBlank @Size(max = 50) String message) { }
     record Snapshot(UUID pickupId, String status, Place place, PlaceProposal placeProposal, Participant participant,
-                    Instant inviteExpiresAt, Instant expiresAt, Instant endedAt, long placeVersion) { }
+                    Instant inviteExpiresAt, Instant expiresAt, Instant endedAt, long placeVersion,
+                    QuickMessage quickMessage, String vehicleName) { }
     record VehicleState(String freshness, Double latitude, Double longitude, Long durationSeconds,
                         Instant sourceTime, Instant receivedAt, long sequence, long validForMillis,
                         Long ageMillis, long placeVersion) { }
@@ -179,5 +182,12 @@ class PickupApi {
     @PostMapping("/{id}/cancellation")
     Snapshot cancel(@PathVariable UUID id, @RequestHeader(value = "Authorization", required = false) String auth) {
         return pickupService.endPickup(id, auth, Pickup.Status.CANCELLED);
+    }
+
+    @PostMapping(value = "/{id}/quick-message", consumes = "application/json")
+    Snapshot quickMessage(@PathVariable UUID id,
+                          @RequestHeader(value = "Authorization", required = false) String auth,
+                          @Valid @RequestBody QuickMessageRequest request) {
+        return pickupService.sendQuickMessage(id, auth, request.message());
     }
 }

@@ -1,5 +1,6 @@
 package app.majung.server.pickup;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -56,6 +57,9 @@ class Pickup {
     Double proposalLatitude;
     Double proposalLongitude;
     Instant proposalAt;
+    @Column(length = 100)
+    String quickMessage;
+    Instant quickMessageAt;
 
     protected Pickup() { }
 

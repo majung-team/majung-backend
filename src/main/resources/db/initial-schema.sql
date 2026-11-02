@@ -35,7 +35,9 @@ CREATE TABLE pickup (
     proposal_label VARCHAR(255),
     proposal_latitude DOUBLE PRECISION,
     proposal_longitude DOUBLE PRECISION,
-    proposal_at TIMESTAMP(6) WITH TIME ZONE
+    proposal_at TIMESTAMP(6) WITH TIME ZONE,
+    quick_message VARCHAR(100),
+    quick_message_at TIMESTAMP(6) WITH TIME ZONE
 );
 CREATE INDEX pickup_retention_ended ON pickup (ended_at);
 CREATE INDEX pickup_retention_expires ON pickup (expires_at);

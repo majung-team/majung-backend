@@ -15,6 +15,7 @@ class PickupService {
     private static final String DEFAULT_PARTICIPANT_NAME = "탑승자";
     private final PickupRepository pickupRepository;
     private final RideRequestRepository rideRequestRepository;
+    private final RegisteredVehicleRepository registeredVehicleRepository;
     private final ArrivalPushService arrivalPush;
     private final TokenService tokenService;
     private final Clock clock;
@@ -26,6 +27,7 @@ class PickupService {
     private final Duration vehicleLastKnown;
 
     PickupService(PickupRepository pickupRepository, RideRequestRepository rideRequestRepository,
+                  RegisteredVehicleRepository registeredVehicleRepository,
                   ArrivalPushService arrivalPush,
                   TokenService tokenService, Clock clock,
                   VehicleRegistrationService vehicleRegistrationService, DeploymentPolicy deploymentPolicy,
@@ -40,6 +42,7 @@ class PickupService {
         }
         this.pickupRepository = pickupRepository;
         this.rideRequestRepository = rideRequestRepository;
+        this.registeredVehicleRepository = registeredVehicleRepository;
         this.arrivalPush = arrivalPush;
         this.tokenService = tokenService;
         this.clock = clock;
@@ -423,6 +426,34 @@ class PickupService {
         pickup.readiness=request.readiness(); pickup.readinessSequence=request.sequence(); return toPickupResponse(pickup,false);
     }
 
+    PickupApi.Snapshot sendQuickMessage(UUID id, String auth, String message) {
+        String token = tokenService.bearer(auth);
+        Pickup pickup = locked(id);
+        boolean isOwner = tokenService.matches(token, pickup.ownerHash);
+        if (!isOwner && !tokenService.matches(token, pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "이 픽업에 접근할 수 없습니다.");
+        }
+        return applyQuickMessage(pickup, message, isOwner);
+    }
+
+    PickupApi.Snapshot sendQuickMessageForAccount(UUID id, String message) {
+        return applyQuickMessage(locked(id), message, false);
+    }
+
+    private PickupApi.Snapshot applyQuickMessage(Pickup pickup, String message, boolean isOwner) {
+        requireSharing(pickup);
+        String text = message == null ? "" : message.strip();
+        if (text.isEmpty()) {
+            throw error(400, "EMPTY_MESSAGE", "메시지를 입력해주세요.");
+        }
+        if (text.length() > 50) {
+            text = text.substring(0, 50);
+        }
+        pickup.quickMessage = text;
+        pickup.quickMessageAt = clock.instant();
+        return toPickupResponse(pickup, isOwner);
+    }
+
     private Pickup locked(UUID id) {
         Pickup pickup = pickupRepository.findLockedById(id)
                 .orElseThrow(() -> error(404, "PICKUP_NOT_FOUND", "픽업을 찾을 수 없습니다."));
@@ -468,8 +499,19 @@ class PickupService {
                 : new PickupApi.Participant(pickup.participantId, pickup.participantName,
                 pickup.readiness, pickup.readinessSequence, pickup.readinessReceivedSequence);
         String status = expired ? "EXPIRED" : inviteExpired ? "INVITE_EXPIRED" : pickup.status.name();
+        PickupApi.QuickMessage quickMessage = (visible && pickup.quickMessage != null)
+                ? new PickupApi.QuickMessage(pickup.quickMessage, pickup.quickMessageAt) : null;
+        String vehicleName = null;
+        if (visible && pickup.vehicleId != null) {
+            vehicleName = registeredVehicleRepository.findById(pickup.vehicleId)
+                    .map(v -> v.displayName)
+                    .orElse("마중 차량");
+        } else if (visible) {
+            vehicleName = "마중 차량";
+        }
         return new PickupApi.Snapshot(pickup.id, status, place, proposal, participant,
-                pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt, pickup.placeVersion);
+                pickup.inviteExpiresAt, pickup.expiresAt, pickup.endedAt, pickup.placeVersion,
+                quickMessage, vehicleName);
     }
 
     private PickupApi.VehicleState toVehicleResponse(Pickup pickup) {
