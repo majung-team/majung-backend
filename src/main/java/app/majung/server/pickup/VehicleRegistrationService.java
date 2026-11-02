@@ -12,15 +12,18 @@ class VehicleRegistrationService {
     private final RegisteredVehicleRepository registeredVehicleRepository;
     private final VehicleRegistrationCodeRepository vehicleRegistrationCodeRepository;
     private final PickupRepository pickupRepository;
+    private final ArrivalPushService arrivalPush;
     private final TokenService tokenService;
     private final Clock clock;
 
     VehicleRegistrationService(RegisteredVehicleRepository registeredVehicleRepository,
                                VehicleRegistrationCodeRepository vehicleRegistrationCodeRepository,
-                               PickupRepository pickupRepository, TokenService tokenService, Clock clock) {
+                               PickupRepository pickupRepository, ArrivalPushService arrivalPush,
+                               TokenService tokenService, Clock clock) {
         this.registeredVehicleRepository = registeredVehicleRepository;
         this.vehicleRegistrationCodeRepository = vehicleRegistrationCodeRepository;
         this.pickupRepository = pickupRepository;
+        this.arrivalPush = arrivalPush;
         this.tokenService = tokenService;
         this.clock = clock;
     }
@@ -83,7 +86,9 @@ class VehicleRegistrationService {
                     pickup.status = Pickup.Status.CANCELLED;
                     pickup.endedAt = clock.instant();
                     pickup.inviteHash = null;
+                    pickup.clearProposal();
                     pickup.clearVehicle();
+                    arrivalPush.remove(pickup.id);
                 }
             }
         }

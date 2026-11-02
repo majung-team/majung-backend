@@ -103,6 +103,7 @@ class Pickup {
         endedAt = expirationTime();
         status = Status.EXPIRED;
         inviteHash = null;
+        clearProposal();
         clearVehicle();
         return true;
     }

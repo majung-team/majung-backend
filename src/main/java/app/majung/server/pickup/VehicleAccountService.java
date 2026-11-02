@@ -15,6 +15,8 @@ class VehicleAccountService {
     private final VehicleRegistrationService registration;
     private final VehicleAccountChallengeRepository challenges;
     private final VehicleAccountLinkRepository links;
+    private final PickupRepository pickups;
+    private final ArrivalPushService arrivalPush;
     private final MemberRepository members;
     private final MemberService accounts;
     private final TokenService tokens;
@@ -22,11 +24,14 @@ class VehicleAccountService {
 
     VehicleAccountService(RegisteredVehicleRepository registeredVehicleRepository, VehicleRegistrationService registration,
             VehicleAccountChallengeRepository challenges, VehicleAccountLinkRepository links,
+            PickupRepository pickups, ArrivalPushService arrivalPush,
             MemberRepository members, MemberService accounts, TokenService tokens, Clock clock) {
         this.registeredVehicleRepository = registeredVehicleRepository;
         this.registration = registration;
         this.challenges = challenges;
         this.links = links;
+        this.pickups = pickups;
+        this.arrivalPush = arrivalPush;
         this.members = members;
         this.accounts = accounts;
         this.tokens = tokens;
@@ -124,11 +129,25 @@ class VehicleAccountService {
         if (!link.member.id.equals(self)) throw notFound();
         links.delete(link);
         challenges.deleteById(vehicleId);
+        cancelOpenPickups(vehicleId);
     }
     void detachDevice(String authorization) {
         RegisteredVehicle vehicle = registration.requireActive(authorization);
         links.deleteById(vehicle.id);
         challenges.deleteById(vehicle.id);
+        cancelOpenPickups(vehicle.id);
+    }
+    private void cancelOpenPickups(UUID vehicleId) {
+        for (Pickup pickup : pickups.findLockedByVehicleId(vehicleId)) {
+            if (!pickup.isTerminal()) {
+                pickup.status = Pickup.Status.CANCELLED;
+                pickup.endedAt = clock.instant();
+                pickup.inviteHash = null;
+                pickup.clearProposal();
+                pickup.clearVehicle();
+            }
+            arrivalPush.remove(pickup.id);
+        }
     }
     @Scheduled(fixedDelay = 60000) @Transactional
     void purgeExpired() {

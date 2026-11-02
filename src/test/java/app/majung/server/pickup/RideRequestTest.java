@@ -139,12 +139,34 @@ class RideRequestTest {
         Driver driver=driver(); Member a=member(); Member b=member();
         var first=service.submit(a.id,input(driver)); service.accept(driver.auth,first.requestId());
         var active=service.start(driver.auth,first.requestId());
+        assertTrue(service.subscribeArrivalPush(a.id,first.requestId(),ArrivalPushTest.ENDPOINT).subscribed());
         var second=service.submit(b.id,input(driver)); service.accept(driver.auth,second.requestId());
         unlink.receive("KakaoAK fixture-admin-key","fixture-app-id",a.providerSubject,"fixture");
         unlink.cleanupOne(a.providerSubject);
         assertEquals("CANCELLED",pickups.getPickup(active.pickupId(),"Bearer "+active.driverToken()).status());
+        assertTrue(arrivalPushes.findById(active.pickupId()).isEmpty());
         assertEquals(0,service.passenger(b.id).get(0).peopleAhead());
         assertEquals("ACTIVE",service.start(driver.auth,second.requestId()).pickup().status());
+    }
+    @Test void vehicleDetachAndRevokeCancelActivePickupAndBlockTrackingAndArrivalPush() {
+        Driver firstDriver=driver(); Member a=member();
+        var first=service.submit(a.id,input(firstDriver)); service.accept(firstDriver.auth,first.requestId());
+        var activeFirst=service.start(firstDriver.auth,first.requestId());
+        assertTrue(service.subscribeArrivalPush(a.id,first.requestId(),ArrivalPushTest.ENDPOINT).subscribed());
+        links.detach(firstDriver.member.id,vehicles.current(firstDriver.auth).vehicleId());
+        assertEquals("CANCELLED",pickups.getPickup(activeFirst.pickupId(),"Bearer "+activeFirst.driverToken()).status());
+        assertEquals("CANCELLED",service.passenger(a.id).get(0).status());
+        assertEquals(403,assertThrows(ApiException.class,()->service.tracking(a.id,first.requestId())).status);
+        assertTrue(arrivalPushes.findById(activeFirst.pickupId()).isEmpty());
+        Driver secondDriver=driver(); Member b=member();
+        var second=service.submit(b.id,input(secondDriver)); service.accept(secondDriver.auth,second.requestId());
+        var activeSecond=service.start(secondDriver.auth,second.requestId());
+        assertTrue(service.subscribeArrivalPush(b.id,second.requestId(),ArrivalPushTest.ENDPOINT).subscribed());
+        vehicles.revoke(vehicles.current(secondDriver.auth).vehicleId());
+        assertEquals("CANCELLED",pickups.getPickup(activeSecond.pickupId(),"Bearer "+activeSecond.driverToken()).status());
+        assertEquals("CANCELLED",service.passenger(b.id).get(0).status());
+        assertEquals(403,assertThrows(ApiException.class,()->service.tracking(b.id,second.requestId())).status);
+        assertTrue(arrivalPushes.findById(activeSecond.pickupId()).isEmpty());
     }
     RideRequestApi.Invite invitation(Driver driver, Member passenger) {
         var connection = members.request(driver.member.id, passenger.id);

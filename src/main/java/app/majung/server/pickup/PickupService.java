@@ -302,6 +302,7 @@ class PickupService {
         requirePlaceVersion(pickup, placeVersion);
         if (pickup.status != Pickup.Status.ARRIVED) pickup.arrivedAt = clock.instant();
         pickup.status = Pickup.Status.ARRIVED;
+        pickup.clearProposal();
         return toPickupResponse(pickup, true);
     }
 
@@ -317,6 +318,7 @@ class PickupService {
         pickup.status = target;
         pickup.endedAt = clock.instant();
         pickup.inviteHash = null;
+        pickup.clearProposal();
         pickup.clearVehicle();
         arrivalPush.remove(pickup.id);
         return toPickupResponse(pickup, true);

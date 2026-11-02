@@ -30,8 +30,9 @@ node deploy/test_eta_contract.mjs ../majung-web/model.js
 | 항목 | 확인하는 시험 | 범위 |
 | --- | --- | --- |
 | 동시 참여·준비 상태·취소와 위치 업로드 경쟁 | PickupApiTest | 실제 로컬 HTTP·DB 동시 요청 |
-| 제안 교체·중복 확정·이전 장소 전송 거절 | PlaceProposalTest | 서버 확정 상태 유지·버전 검증 |
+| 제안 교체·중복 확정·이전 장소 전송 거절·도착 시 미확정 제안 정리 | PlaceProposalTest | 서버 확정 상태 유지·버전 검증·도착/종료 정리 |
 | 세션 로그아웃·다른 계정·철회 후 SSE 차단 | PickupEventsAuthorizationTest, SharedSessionServerTest | SSE와 공유 JDBC 로그인 세션 |
+| 차량 계정 해제·차량 철회·카카오 해제 시 활성 픽업·조회·푸시 즉시 차단 | RideRequestTest, VehicleAccountTest | 연결 해제 후 픽업 취소·추적 차단·구독 제거 |
 | 구독 해제·픽업 종료·잘못된 접근 | ArrivalPushTest | 구독 상태와 모의 푸시 전송 |
 | 앱 저장 정보 복원·일시 503·잘못된 권한 삭제 | 차량 앱 PickupRecoveryTest | Android Keystore·로컬 HTTP 시험 서버 |
 | 새 프로세스와 SDK 연결에서 이전 픽업 이어가기 | 차량 앱 기존 프로세스 복구 기록 | 에뮬레이터. 실제 시동 시험과 구분 |
