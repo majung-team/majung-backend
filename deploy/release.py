@@ -112,12 +112,32 @@ def upstream_config(slot):
             '}\n')
 
 
+def ensure_job_selector_readable():
+    """Only the application group may traverse the private configuration directory.
+
+    Environment and policy files remain root-only; the application reads just the
+    non-secret slot selector so the active slot can run expiration/cleanup jobs.
+    """
+    directory = ACTIVE_SLOT.parent
+    if directory.is_symlink() or ACTIVE_SLOT.is_symlink() or not ACTIVE_SLOT.is_file():
+        raise ValueError('Active slot selector must be a regular file')
+    for name in ('server.env', 'deploy-policy.json'):
+        private = directory / name
+        if private.exists() and (private.is_symlink() or not private.is_file() or
+                                 stat.S_IMODE(private.stat().st_mode) != 0o600):
+            raise ValueError('Private configuration must remain owner-only')
+    os.chown(directory, 0, pwd.getpwnam('majung').pw_gid)
+    directory.chmod(0o710)
+    run('runuser', '-u', 'majung', '--', 'test', '-r', str(ACTIVE_SLOT))
+
+
 def publish_blue_green(revision, data):
     verify_jar(data, revision)
     state = json.loads(SLOT_STATE.read_text())
     active = state.get('active')
     if active not in SLOT_PORTS or not re.fullmatch('[0-9a-f]{40}', state.get('revision', '')):
         raise ValueError('Invalid active backend state')
+    ensure_job_selector_readable()
     candidate = 'green' if active == 'blue' else 'blue'
     directory = SLOT_ROOT / candidate
     if not directory.is_dir() or directory.is_symlink(): raise ValueError('Slot is not prepared')
