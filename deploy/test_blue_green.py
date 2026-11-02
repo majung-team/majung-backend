@@ -5,6 +5,7 @@ import pathlib
 import tempfile
 import unittest
 import zipfile
+import types
 from unittest.mock import patch
 import release
 
@@ -41,7 +42,7 @@ class BlueGreenTest(unittest.TestCase):
                     reload_failed=True; raise RuntimeError('fixture reload failure')
             with patch.object(release,'SLOT_ROOT',slots),patch.object(release,'SLOT_STATE',state),\
                  patch.object(release,'UPSTREAM',route),patch.object(release,'ACTIVE_SLOT',active),\
-                 patch.object(release,'run',side_effect=command),patch.object(release,'probe',side_effect=checks) as probe,\
+                 patch.object(release,'run',side_effect=command),patch.object(release,'ensure_job_selector_readable'),patch.object(release,'probe',side_effect=checks) as probe,\
                  patch.object(release.time,'sleep'),contextlib.redirect_stdout(io.StringIO()):
                 failure=None
                 try: release.publish_blue_green(NEW,jar())
@@ -88,3 +89,46 @@ class BlueGreenTest(unittest.TestCase):
         response.read.return_value = json.dumps({'revision': OLD, 'slot': 'blue'}).encode()
         with patch.object(release.urllib.request, 'urlopen', return_value=response), patch.object(release.time, 'sleep'):
             self.assertFalse(release.probe('https://example.invalid/health', OLD, attempts=1, expected_slot='green'))
+
+class JobSelectorAccessTest(unittest.TestCase):
+    def test_directory_traversal_is_granted_without_exposing_private_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary) / 'config'
+            directory.mkdir(mode=0o700)
+            selector = directory / 'active-slot'; selector.write_text('blue\n'); selector.chmod(0o644)
+            secret = directory / 'server.env'; secret.write_text('fixture'); secret.chmod(0o600)
+            with patch.object(release, 'ACTIVE_SLOT', selector), patch.object(release.os, 'chown') as ownership, \
+                 patch.object(release.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_gid=1001)), \
+                 patch.object(release, 'run') as command:
+                release.ensure_job_selector_readable()
+            self.assertEqual(0o710, directory.stat().st_mode & 0o777)
+            self.assertEqual(0o600, secret.stat().st_mode & 0o777)
+            ownership.assert_called_once_with(directory, 0, 1001)
+            command.assert_called_once_with('runuser', '-u', 'majung', '--', 'test', '-r', str(selector))
+
+    def test_symlink_is_rejected_before_permission_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            target = root / 'target'; target.write_text('blue\n')
+            selector = root / 'active-slot'; selector.symlink_to(target)
+            with patch.object(release, 'ACTIVE_SLOT', selector), patch.object(release.os, 'chown') as ownership:
+                with self.assertRaises(ValueError): release.ensure_job_selector_readable()
+                ownership.assert_not_called()
+
+    def test_private_environment_must_remain_unreadable_before_traversal_grant(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            selector = root / 'active-slot'; selector.write_text('blue\n')
+            private = root / 'server.env'; private.write_text('fixture'); private.chmod(0o644)
+            with patch.object(release, 'ACTIVE_SLOT', selector), patch.object(release.os, 'chown') as ownership:
+                with self.assertRaises(ValueError): release.ensure_job_selector_readable()
+                ownership.assert_not_called()
+
+    def test_unreadable_selector_stops_deployment_before_service_actions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            slots, state, route, active = BlueGreenTest().prepare(pathlib.Path(temporary))
+            with patch.object(release, 'SLOT_STATE', state), \
+                 patch.object(release, 'ensure_job_selector_readable', side_effect=RuntimeError('unreadable')), \
+                 patch.object(release, 'run') as command:
+                with self.assertRaises(RuntimeError): release.publish_blue_green(NEW, jar())
+                command.assert_not_called()
