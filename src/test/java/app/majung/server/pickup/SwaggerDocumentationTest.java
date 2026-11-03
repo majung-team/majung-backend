@@ -32,10 +32,10 @@ class SwaggerDocumentationTest {
             .build();
 
     @Test
-    @DisplayName("OpenAPI JSON 명세서(/v3/api-docs)가 정상적으로 생성되어야 한다")
+    @DisplayName("OpenAPI JSON 명세서(/api/v3/api-docs)가 정상적으로 생성되어야 한다")
     void openApiDocsEndpointReturnsValidJson() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + port + "/v3/api-docs"))
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/v3/api-docs"))
                 .GET()
                 .build();
 
@@ -51,10 +51,10 @@ class SwaggerDocumentationTest {
     }
 
     @Test
-    @DisplayName("Swagger UI HTML(/swagger-ui/index.html)이 정상적으로 응답하고 CSP에 unsafe-inline이 포함되어야 한다")
+    @DisplayName("Swagger UI HTML(/api/swagger-ui/index.html)이 정상적으로 응답하고 CSP에 unsafe-inline이 포함되어야 한다")
     void swaggerUiHtmlEndpointReturnsOkWithCsp() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + port + "/swagger-ui/index.html"))
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/swagger-ui/index.html"))
                 .GET()
                 .build();
 

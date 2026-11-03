@@ -24,7 +24,7 @@ class RequestSafetyFilter extends OncePerRequestFilter {
         response.setHeader("Referrer-Policy", "no-referrer");
         response.setHeader("X-Content-Type-Options", "nosniff");
         String uri = request.getRequestURI();
-        if (uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs")) {
+        if (uri.contains("/swagger-ui") || uri.contains("/v3/api-docs")) {
             response.setHeader("Content-Security-Policy", "default-src 'self'; "
                     + "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
                     + "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");

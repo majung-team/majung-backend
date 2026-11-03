@@ -50,7 +50,11 @@ class ApiRateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !enabled || !request.getServletPath().startsWith("/api/");
+        String path = request.getServletPath();
+        if (path.contains("/swagger-ui") || path.contains("/v3/api-docs")) {
+            return true;
+        }
+        return !enabled || !path.startsWith("/api/");
     }
 
     @Override
