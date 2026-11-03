@@ -46,6 +46,7 @@ class SwaggerDocumentationTest {
         assertTrue(body.contains("마중 (Majung) API 명세서"), "Title should match");
         assertTrue(body.contains("/api/v1/pickups"), "Pickups path should exist");
         assertTrue(body.contains("/api/v1/ride-requests"), "Ride requests path should exist");
+        assertTrue(body.contains("/api/v1/pickup-plans"), "Pickup plans path should exist");
         assertTrue(body.contains("bearerAuth"), "Bearer auth scheme should exist");
         assertTrue(body.contains("sessionCookie"), "Session cookie scheme should exist");
     }
