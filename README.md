@@ -16,6 +16,7 @@
 - [마중 프로젝트](https://github.com/majung-team/majung)
 - [전체 사용 안내 Wiki](https://github.com/majung-team/majung/wiki)
 - [모바일 웹](https://majung.cloud)
+- [Swagger UI API 명세서](https://majung.cloud/api/swagger-ui/index.html)
 - [API 상태 확인](https://majung.cloud/api/v1/health)
 - [백업 복원·운영 점검](docs/operations-recovery.md)
 - [복구·ETA·권한 검증](docs/stability-verification.md)
@@ -136,6 +137,18 @@
 - 위치 공유 및 접근 권한 종료
 
 ETA가 0이 됐다는 이유만으로 서버가 자동으로 탑승 완료 처리하지 않는다. 운전자의 탑승 완료 확인을 통해 위치 공유를 안전하게 종료한다.
+
+### 다중 픽업 계획 및 동적 경로 최적화 (Pickup Plans)
+
+최대 5명의 탑승자를 순차적으로 경유하는 다중 픽업 계획 및 경로 최적화 API를 제공한다.
+
+- `POST /api/v1/pickup-plans`: 신규 다중 픽업 계획 수립
+- `POST /api/v1/pickup-plans/{id}/stops`: 중간 경유지(탑승자/장소) 동적 추가
+- `DELETE /api/v1/pickup-plans/{id}/stops/{stopId}`: 탑승 취소 시 경유지 제거
+- `POST /api/v1/pickup-plans/{id}/optimize`: TSP 순열 알고리즘 기반 최단 거리/소요 시간 자동 최적화
+- `POST /api/v1/pickup-plans/{id}/confirm`: 운전자 1회 승인으로 최적화 경로 확정 및 실시간 안내 전환
+- `GET /api/v1/pickup-plans/{id}/etas`: 개별 탑승자별 독립적 실시간 도착 예정 시간(ETA) 산출
+- `POST /api/v1/pickup-plans/{id}/stops/{stopId}/complete`: 개별 탑승 완료 처리 및 다음 경유지 자동 전환
 
 ---
 
