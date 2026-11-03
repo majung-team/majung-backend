@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "02. 마중 요청 & 대기열 (Ride Requests)", description = "탑승자의 마중 요청, 운전자 수락/거절, 대기열 관리")
 @RestController
 class RideRequestApi {
     record Submit(@NotNull UUID driverId, @NotNull @Valid PickupApi.Place place, @NotNull UUID requestId) { }

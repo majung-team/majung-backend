@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "05. 차량 등록 관리 (Vehicle Enrollment)", description = "차량 식별자 및 등록 상태 관리")
 @RestController
 class VehicleEnrollmentApi {
     record Started(UUID enrollmentId, String deviceToken, String code, Instant expiresAt) { }

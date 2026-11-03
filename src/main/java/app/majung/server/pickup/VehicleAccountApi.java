@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "03. 차량-계정 연동 (Vehicle Accounts)", description = "차량 QR을 통한 운전자 계정 연동 및 승인")
 @RestController
 class VehicleAccountApi {
     record Challenge(UUID challengeId, String code, Instant expiresAt) { }

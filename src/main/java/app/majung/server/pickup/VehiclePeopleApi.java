@@ -6,7 +6,9 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "06. 사람 연결 (Vehicle People)", description = "운전자와 탑승자 간 사전 연결/즐겨찾기 관리")
 @RestController
 @RequestMapping("/api/v1/vehicles/people")
 class VehiclePeopleApi {

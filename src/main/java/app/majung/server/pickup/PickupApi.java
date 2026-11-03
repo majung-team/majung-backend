@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "01. 픽업 (Pickups)", description = "픽업 생성, 초대 참여, 상태/준비 변경, 차량 위치 업데이트 등")
 @RestController
 @RequestMapping(value = "/api/v1/pickups", produces = "application/json")
 class PickupApi {

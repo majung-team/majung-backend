@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "08. 실시간 이벤트 SSE (Pickup Events)", description = "픽업 상태 변경 실시간 서버 전송 이벤트(SSE)")
 @RestController
 class PickupEventsApi {
     private final PickupService pickups;

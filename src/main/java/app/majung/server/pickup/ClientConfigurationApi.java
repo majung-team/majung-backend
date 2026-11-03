@@ -3,7 +3,9 @@ package app.majung.server.pickup;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "09. 클라이언트 설정 (Client Config)", description = "카카오맵 키, VAPID 공개키 등 클라이언트 설정 조회")
 @RestController
 class ClientConfigurationApi {
     record Configuration(boolean developmentToolsEnabled, String kakaoMapJavaScriptKey, String webPushPublicKey) { }

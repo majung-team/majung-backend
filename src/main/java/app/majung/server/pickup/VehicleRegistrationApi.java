@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "04. 차량 등록 (Vehicle Registration)", description = "차량 등록 코드 발급 및 기기 등록")
 @RestController
 class VehicleRegistrationApi {
     record IssuedCode(UUID registrationCodeId, String code, Instant expiresAt) { }

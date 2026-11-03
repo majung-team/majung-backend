@@ -11,7 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "07. 회원 계정 (Accounts)", description = "로그인 세션 확인, 닉네임 설정, 운전자 검색")
 @RestController
 class AccountApi {
     record Profile(UUID memberId, String majungId, String nickname, boolean profileReady) { }

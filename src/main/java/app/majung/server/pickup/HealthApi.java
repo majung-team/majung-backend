@@ -6,7 +6,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "10. 시스템 헬스체크 (Health)", description = "서비스 가동 상태 점검")
 @RestController
 class HealthApi {
     record Health(String status, String revision, String slot) { }
