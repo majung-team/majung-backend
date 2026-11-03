@@ -44,6 +44,7 @@ class SwaggerDocumentationTest {
         assertEquals(200, response.statusCode());
         String body = response.body();
         assertTrue(body.contains("마중 (Majung) API 명세서"), "Title should match");
+        assertTrue(body.contains("https://majung.cloud"), "Production server URL should be https://majung.cloud");
         assertTrue(body.contains("/api/v1/pickups"), "Pickups path should exist");
         assertTrue(body.contains("/api/v1/ride-requests"), "Ride requests path should exist");
         assertTrue(body.contains("/api/v1/pickup-plans"), "Pickup plans path should exist");

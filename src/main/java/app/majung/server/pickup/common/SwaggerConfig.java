@@ -38,7 +38,7 @@ class SwaggerConfig {
         if (serverUrl != null && !serverUrl.isBlank()) {
             openApi.addServersItem(new Server().url(serverUrl).description("지정 서버"));
         } else {
-            openApi.addServersItem(new Server().url("https://api.majung.cloud").description("운영 서버 (GCP)"));
+            openApi.addServersItem(new Server().url("https://majung.cloud").description("운영 서버 (GCP)"));
             openApi.addServersItem(new Server().url("http://localhost:8080").description("로컬 개발 서버"));
         }
 
