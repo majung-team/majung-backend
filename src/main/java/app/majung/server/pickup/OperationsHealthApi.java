@@ -7,11 +7,18 @@ import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /** Publishes availability only. Host details, backup metadata and pickup counts stay on the VM. */
+@Tag(name = "10. 시스템 헬스체크 (Health)")
 @RestController
 class OperationsHealthApi {
-    record Health(String status) { }
+    record Health(
+            @Schema(description = "운영 상태 (UP)", example = "UP") String status) { }
     private final ObjectMapper mapper;
     private final Path state;
     private final Clock clock;
@@ -24,6 +31,11 @@ class OperationsHealthApi {
         this.clock = clock;
     }
 
+    @Operation(summary = "운영 백업 및 호스트 헬스체크", description = "서버 VM 내부의 일일 백업 상태 및 호스트 점검 파일의 최신성을 확인합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "운영 정상 (UP)"),
+            @ApiResponse(responseCode = "503", description = "운영 점검 파일 만료 또는 확인 실패")
+    })
     @GetMapping("/api/v1/health/operations")
     Health health() {
         try (var input = Files.newInputStream(state)) {
