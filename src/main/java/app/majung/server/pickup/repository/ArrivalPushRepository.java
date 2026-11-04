@@ -1,12 +1,19 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.repository;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
-interface ArrivalPushRepository extends JpaRepository<ArrivalPush, UUID> {
+public interface ArrivalPushRepository extends JpaRepository<ArrivalPush, UUID> {
     /** Atomic once-only claim: exactly one caller sees 1 for a pickup, however many updates race. */
     @Modifying
     @Query("update ArrivalPush a set a.notifiedAt = :now where a.pickupId = :pickupId and a.notifiedAt is null and a.placeVersion = :placeVersion")

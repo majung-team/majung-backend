@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.common;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -12,13 +19,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-class SwaggerConfig {
+public class SwaggerConfig {
 
     private static final String BEARER_TOKEN = "bearerAuth";
     private static final String SESSION_COOKIE = "sessionCookie";
 
     @Bean
-    OpenAPI majungOpenAPI(@Value("${majung.swagger.server-url:}") String serverUrl) {
+    public OpenAPI majungOpenAPI(@Value("${majung.swagger.server-url:}") String serverUrl) {
         OpenAPI openApi = new OpenAPI()
                 .info(new Info()
                         .title("마중 (Majung) API 명세서")

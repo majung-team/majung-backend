@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
@@ -10,7 +18,7 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class OperationsHealthApiTest {
+public class OperationsHealthApiTest {
     @TempDir Path directory;
     private final Clock clock = Clock.fixed(Instant.ofEpochSecond(1000), ZoneOffset.UTC);
 

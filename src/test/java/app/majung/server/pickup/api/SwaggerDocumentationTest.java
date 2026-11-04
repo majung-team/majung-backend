@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "majung.rate-limit.enabled=false"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class SwaggerDocumentationTest {
+public class SwaggerDocumentationTest {
 
     @LocalServerPort
     int port;

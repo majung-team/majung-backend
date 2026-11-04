@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.service.*;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,7 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-class RequestSafetyFilter extends OncePerRequestFilter {
+public class RequestSafetyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                   FilterChain chain) throws ServletException, IOException {

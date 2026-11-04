@@ -1,14 +1,21 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.job;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /** Candidate servers serve health checks, while only the selected slot runs periodic jobs. */
-final class ActiveDeploymentJobs {
+public final class ActiveDeploymentJobs {
     private ActiveDeploymentJobs() { }
 
-    static boolean allowed() {
+    public static boolean allowed() {
         String slot = System.getenv("MAJUNG_SLOT");
         if (slot == null || slot.isBlank()) return true;
         String file = System.getenv("MAJUNG_ACTIVE_SLOT_FILE");

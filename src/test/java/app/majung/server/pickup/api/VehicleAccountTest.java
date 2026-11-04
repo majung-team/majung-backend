@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.UUID;
@@ -16,7 +24,7 @@ import org.springframework.context.annotation.Import;
     "majung.rate-limit.enabled=false", "majung.login.unlink-cleanup-enabled=false"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class VehicleAccountTest {
+public class VehicleAccountTest {
     static final AtomicLong subjects = new AtomicLong(800000);
     @Autowired VehicleAccountService links;
     @Autowired VehicleRegistrationService vehicles;

@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
@@ -16,26 +23,26 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "02. 마중 요청 & 대기열 (Ride Requests)", description = "탑승자의 마중 요청, 운전자 수락/거절, 대기열 순번 및 실시간 트래킹 API")
 @RestController
-class RideRequestApi {
-    record Submit(
+public class RideRequestApi {
+    public record Submit(
             @Schema(description = "마중을 요청할 운전자 회원 식별자 (UUID)") @NotNull UUID driverId,
             @Schema(description = "탑승 희망 장소") @NotNull @Valid PickupApi.Place place,
             @Schema(description = "클라이언트 멱등성 요청 식별자 (UUID)") @NotNull UUID requestId) { }
 
-    record Invite(
+    public record Invite(
             @Schema(description = "초대할 승객과의 연결 식별자 (UUID)") @NotNull UUID connectionId,
             @Schema(description = "픽업 약속 장소") @NotNull @Valid PickupApi.Place place,
             @Schema(description = "클라이언트 멱등성 요청 식별자 (UUID)") @NotNull UUID requestId) { }
 
-    record Contacts(
+    public record Contacts(
             @Schema(description = "연결된 대상 목록") List<Contact> items) { }
 
-    record Contact(
+    public record Contact(
             @Schema(description = "연결 식별자 (UUID)") UUID connectionId,
             @Schema(description = "상대방 닉네임", example = "홍길동") String nickname,
             @Schema(description = "상대방 마중 아이디", example = "passenger_lee") String majungId) { }
 
-    record View(
+    public record View(
             @Schema(description = "마중 요청 식별자 (UUID)") UUID requestId,
             @Schema(description = "요청 상태 (PENDING, ACCEPTED, REJECTED, CANCELLED, STARTED)", example = "PENDING") String status,
             @Schema(description = "상대방 닉네임", example = "김운전") String nickname,
@@ -47,21 +54,21 @@ class RideRequestApi {
             @Schema(description = "잔여 시간 데이터 유효 기간 (밀리초)", example = "10000") long currentPickupValidForMillis,
             @Schema(description = "운전자가 먼저 보낸 초대인지 여부", example = "false") boolean driverInvitation) { }
 
-    record ListView(
+    public record ListView(
             @Schema(description = "마중 요청 목록") List<View> requests) { }
 
-    record Started(
+    public record Started(
             @Schema(description = "생성된 픽업 세션 식별자 (UUID)") UUID pickupId,
             @Schema(description = "운전자 인증 토큰 (Bearer)") String driverToken,
             @Schema(description = "픽업 상세 스냅샷") PickupApi.Snapshot pickup) { }
 
-    record Tracking(
+    public record Tracking(
             @Schema(description = "픽업 상세 스냅샷") PickupApi.Snapshot pickup,
             @Schema(description = "차량 실시간 GPS 위치 및 도착 잔여 시간") PickupApi.VehicleState vehicle) { }
 
     private final RideRequestService service;
 
-    RideRequestApi(RideRequestService service) {
+    public RideRequestApi(RideRequestService service) {
         this.service = service;
     }
 

@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.common;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.kakao-map.javascript-key=test-map-key"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class DeploymentHttpTest {
+public class DeploymentHttpTest {
     private static final String TEST_KEY = "test-only-not-a-real-key-0123456789";
     private static final String PLACE = "{\"place\":{\"label\":\"예시 장소\",\"latitude\":37,\"longitude\":127}}";
     private final HttpClient client = HttpClient.newHttpClient();

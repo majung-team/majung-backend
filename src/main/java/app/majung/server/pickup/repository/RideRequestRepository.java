@@ -1,12 +1,19 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.repository;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-interface RideRequestRepository extends JpaRepository<RideRequest, UUID> {
+public interface RideRequestRepository extends JpaRepository<RideRequest, UUID> {
     List<RideRequest> findByDriverIdOrderByCreatedAtAscIdAsc(UUID driverId);
     boolean existsByPickupId(UUID pickupId);
     @Query("select r from RideRequest r where r.passengerId = :self order by r.createdAt desc, r.id")

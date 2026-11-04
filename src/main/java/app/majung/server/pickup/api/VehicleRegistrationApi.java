@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -23,27 +30,27 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "04. 차량 등록 (Vehicle Registration)", description = "차량 등록 코드 발급, 기기 등록 및 차량 정보 관리 API")
 @RestController
-class VehicleRegistrationApi {
-    record IssuedCode(
+public class VehicleRegistrationApi {
+    public record IssuedCode(
             @Schema(description = "등록 코드 식별자 (UUID)") UUID registrationCodeId,
             @Schema(description = "43자리 일회용 차량 등록 코드", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") String code,
             @Schema(description = "코드 만료 시각") Instant expiresAt) { }
 
-    record CodeStatus(
+    public record CodeStatus(
             @Schema(description = "등록 코드 식별자 (UUID)") UUID registrationCodeId,
             @Schema(description = "만료 시각") Instant expiresAt,
             @Schema(description = "소비(등록 완료) 시각") Instant consumedAt,
             @Schema(description = "등록된 차량 식별자 (UUID)") UUID vehicleId) { }
 
-    record Registration(
+    public record Registration(
             @Schema(description = "43자리 등록 코드", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{43}") String code,
             @Schema(description = "차량 명칭 (최대 32자)", example = "카니발 12가3456") @NotBlank @Size(max = 32) String displayName) { }
 
-    record Registered(
+    public record Registered(
             @Schema(description = "발급된 차량 식별자 (UUID)") UUID vehicleId,
             @Schema(description = "차량 전용 영구 인증 토큰 (Bearer)") String vehicleToken) { }
 
-    record VehicleInfo(
+    public record VehicleInfo(
             @Schema(description = "차량 식별자 (UUID)") UUID vehicleId,
             @Schema(description = "차량 명칭", example = "카니발 12가3456") String displayName,
             @Schema(description = "최초 등록 시각") Instant registeredAt,
@@ -52,7 +59,7 @@ class VehicleRegistrationApi {
     private final DeploymentPolicy deploymentPolicy;
     private final VehicleRegistrationService vehicleRegistrationService;
 
-    VehicleRegistrationApi(DeploymentPolicy deploymentPolicy, VehicleRegistrationService vehicleRegistrationService) {
+    public VehicleRegistrationApi(DeploymentPolicy deploymentPolicy, VehicleRegistrationService vehicleRegistrationService) {
         this.deploymentPolicy = deploymentPolicy;
         this.vehicleRegistrationService = vehicleRegistrationService;
     }

@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -10,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
-class VehicleAccountService {
+public class VehicleAccountService {
     private final RegisteredVehicleRepository registeredVehicleRepository;
     private final VehicleRegistrationService registration;
     private final VehicleAccountChallengeRepository challenges;
@@ -22,7 +29,7 @@ class VehicleAccountService {
     private final TokenService tokens;
     private final Clock clock;
 
-    VehicleAccountService(RegisteredVehicleRepository registeredVehicleRepository, VehicleRegistrationService registration,
+    public VehicleAccountService(RegisteredVehicleRepository registeredVehicleRepository, VehicleRegistrationService registration,
             VehicleAccountChallengeRepository challenges, VehicleAccountLinkRepository links,
             PickupRepository pickups, ArrivalPushService arrivalPush,
             MemberRepository members, MemberService accounts, TokenService tokens, Clock clock) {
@@ -37,7 +44,7 @@ class VehicleAccountService {
         this.tokens = tokens;
         this.clock = clock;
     }
-    VehicleAccountApi.Challenge issue(String authorization) {
+    public VehicleAccountApi.Challenge issue(String authorization) {
         RegisteredVehicle vehicle = registration.requireActive(authorization);
         if (links.existsById(vehicle.id)) throw conflict("이미 계정이 연결돼 있어요. 연결을 해제한 뒤 다시 시도해주세요.");
         VehicleAccountChallenge challenge = challenges.findById(vehicle.id).orElseGet(VehicleAccountChallenge::new);
@@ -51,7 +58,7 @@ class VehicleAccountService {
         challenges.save(challenge);
         return new VehicleAccountApi.Challenge(challenge.challengeId, code, challenge.expiresAt);
     }
-    VehicleAccountApi.DeviceView device(String authorization) {
+    public VehicleAccountApi.DeviceView device(String authorization) {
         RegisteredVehicle vehicle = registration.requireActive(authorization);
         VehicleAccountLink link = links.findById(vehicle.id).orElse(null);
         if (link != null) {
@@ -69,7 +76,7 @@ class VehicleAccountService {
         return view(challenge.claimant == null ? "AWAITING_ACCOUNT" : "AWAITING_VEHICLE_CONFIRMATION",
                 challenge.challengeId, challenge.claimant, challenge.expiresAt);
     }
-    VehicleAccountApi.RequestView claim(UUID self, VehicleAccountApi.Claim request) {
+    public VehicleAccountApi.RequestView claim(UUID self, VehicleAccountApi.Claim request) {
         VehicleAccountChallenge hint = challenges.findByChallengeId(request.challengeId()).orElseThrow(VehicleAccountService::unavailable);
         RegisteredVehicle vehicle = active(hint.vehicleId);
         Member member = readyMember(self);
@@ -81,7 +88,7 @@ class VehicleAccountService {
         challenge.claimant = member;
         return requestView(challenge, vehicle);
     }
-    VehicleAccountApi.DeviceView confirm(String authorization, UUID challengeId) {
+    public VehicleAccountApi.DeviceView confirm(String authorization, UUID challengeId) {
         RegisteredVehicle vehicle = registration.requireActive(authorization);
         VehicleAccountChallenge challenge = live(challengeId);
         if (!challenge.vehicleId.equals(vehicle.id) || challenge.claimant == null) throw unavailable();
@@ -98,7 +105,7 @@ class VehicleAccountService {
         challenge.confirmedAt = clock.instant();
         return view("LINKED", null, member, null);
     }
-    VehicleAccountApi.RequestView request(UUID self, UUID id) {
+    public VehicleAccountApi.RequestView request(UUID self, UUID id) {
         accounts.current(self);
         VehicleAccountChallenge hint = live(id);
         RegisteredVehicle vehicle = active(hint.vehicleId);
@@ -106,14 +113,14 @@ class VehicleAccountService {
         if (challenge.claimant == null || !challenge.claimant.id.equals(self)) throw notFound();
         return requestView(challenge, vehicle);
     }
-    List<VehicleAccountApi.LinkView> links(UUID self) {
+    public List<VehicleAccountApi.LinkView> links(UUID self) {
         accounts.current(self);
         return links.findByMemberIdOrderByLinkedAtDesc(self).stream().map(link -> {
             RegisteredVehicle vehicle = registeredVehicleRepository.findById(link.vehicleId).orElseThrow(VehicleAccountService::notFound);
             return vehicle.revokedAt == null ? new VehicleAccountApi.LinkView(vehicle.id, vehicle.displayName, link.linkedAt) : null;
         }).filter(java.util.Objects::nonNull).toList();
     }
-    void cancel(UUID self, UUID id) {
+    public void cancel(UUID self, UUID id) {
         accounts.current(self);
         VehicleAccountChallenge hint = live(id);
         active(hint.vehicleId);
@@ -122,7 +129,7 @@ class VehicleAccountService {
         if (challenge.confirmedAt != null) throw conflict("이미 연결됐어요. 연결된 차량 목록에서 해제해주세요.");
         challenges.delete(challenge);
     }
-    void detach(UUID self, UUID vehicleId) {
+    public void detach(UUID self, UUID vehicleId) {
         accounts.current(self);
         registeredVehicleRepository.findLockedById(vehicleId).orElseThrow(VehicleAccountService::notFound);
         VehicleAccountLink link = links.findById(vehicleId).orElseThrow(VehicleAccountService::notFound);
@@ -131,7 +138,7 @@ class VehicleAccountService {
         challenges.deleteById(vehicleId);
         cancelOpenPickups(vehicleId);
     }
-    void detachDevice(String authorization) {
+    public void detachDevice(String authorization) {
         RegisteredVehicle vehicle = registration.requireActive(authorization);
         links.deleteById(vehicle.id);
         challenges.deleteById(vehicle.id);
@@ -150,7 +157,7 @@ class VehicleAccountService {
         }
     }
     @Scheduled(fixedDelay = 60000) @Transactional
-    void purgeExpired() {
+    public void purgeExpired() {
         if (ActiveDeploymentJobs.allowed()) challenges.deleteExpired(clock.instant());
     }
 

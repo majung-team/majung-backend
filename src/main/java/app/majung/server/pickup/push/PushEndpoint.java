@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.push;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -9,8 +16,8 @@ import java.util.Locale;
  * The server calls the subscription URL itself, so only the browser vendors' push services are accepted.
  * This keeps a passenger from pointing the server at an internal address.
  */
-final class PushEndpoint {
-    static final int MAX_LENGTH = 1024;
+public final class PushEndpoint {
+    public static final int MAX_LENGTH = 1024;
     // fcm.googleapis.com: Chrome/Edge/Android, push.services.mozilla.com: Firefox,
     // push.apple.com: Safari and home-screen web apps, notify.windows.com: legacy Edge.
     private static final List<String> SERVICES = List.of(
@@ -18,7 +25,7 @@ final class PushEndpoint {
 
     private PushEndpoint() { }
 
-    static String validate(String endpoint) {
+    public static String validate(String endpoint) {
         if (endpoint == null || endpoint.isBlank() || endpoint.length() > MAX_LENGTH) throw invalid();
         URI uri;
         try {

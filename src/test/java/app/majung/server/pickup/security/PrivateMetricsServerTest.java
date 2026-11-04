@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import app.majung.server.MajungServerApplication;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,7 +19,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import static org.junit.jupiter.api.Assertions.*;
 
-class PrivateMetricsServerTest {
+public class PrivateMetricsServerTest {
     @Test void metricsUseSeparateLoopbackPortAndNeverTheApplicationPort() throws Exception {
         try (var context = new SpringApplicationBuilder(MajungServerApplication.class).run(
                 "--server.address=127.0.0.1", "--server.port=0", "--management.server.port=0",

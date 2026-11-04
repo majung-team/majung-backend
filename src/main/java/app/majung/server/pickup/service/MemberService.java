@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.Clock;
@@ -15,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-class MemberService {
+public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberConnectionRepository memberConnectionRepository;
     private final KakaoUnlinkRepository unlinkRepository;
@@ -23,7 +30,7 @@ class MemberService {
     private final TransactionTemplate transaction;
     private final SecureRandom random = new SecureRandom();
 
-    MemberService(MemberRepository memberRepository, MemberConnectionRepository memberConnectionRepository,
+    public MemberService(MemberRepository memberRepository, MemberConnectionRepository memberConnectionRepository,
                   KakaoUnlinkRepository unlinkRepository, Clock clock, PlatformTransactionManager transactionManager) {
         this.memberRepository = memberRepository;
         this.memberConnectionRepository = memberConnectionRepository;
@@ -33,7 +40,7 @@ class MemberService {
     }
 
     // The provider identity comes only from the server-side OAuth user-info response.
-    Member login(String subject) {
+    public Member login(String subject) {
         if (subject == null || !subject.matches("[0-9]{1,30}"))
             throw new ApiException(502, "LOGIN_IDENTITY_INVALID", "로그인 정보를 확인하지 못했어요.");
         for (int attempt = 0; attempt < 4; attempt++) {
@@ -64,7 +71,7 @@ class MemberService {
     }
 
     @Transactional(readOnly = true)
-    Member current(UUID id) {
+    public Member current(UUID id) {
         Member member = memberRepository.findById(id).orElseThrow(() ->
                 new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요."));
         requireLinked(member.providerSubject);
@@ -72,7 +79,7 @@ class MemberService {
     }
 
     @Transactional
-    AccountApi.Profile nickname(UUID id, String input) {
+    public AccountApi.Profile nickname(UUID id, String input) {
         Member member = memberRepository.lockById(id).orElseThrow(() ->
                 new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요."));
         requireLinked(member.providerSubject);
@@ -86,7 +93,7 @@ class MemberService {
     }
 
     @Transactional(readOnly = true)
-    List<AccountApi.SearchResult> search(UUID self, String input, int page) {
+    public List<AccountApi.SearchResult> search(UUID self, String input, int page) {
         requireReady(current(self));
         String query = Normalizer.normalize(input.strip(), Normalizer.Form.NFKC);
         if (query.length() < 2 || query.length() > 32 || page < 0 || page > 50)
@@ -97,7 +104,7 @@ class MemberService {
     }
 
     @Transactional
-    AccountApi.Connection request(UUID self, UUID target) {
+    public AccountApi.Connection request(UUID self, UUID target) {
         if (self.equals(target)) throw new ApiException(400, "SELF_CONNECTION", "본인에게 연결 요청을 보낼 수 없어요.");
         // Lock member rows in a stable order: duplicate/opposite-direction requests serialize.
         UUID first = self.compareTo(target) < 0 ? self : target;
@@ -128,7 +135,7 @@ class MemberService {
     }
 
     @Transactional
-    AccountApi.Connection change(UUID self, UUID id, String action) {
+    public AccountApi.Connection change(UUID self, UUID id, String action) {
         current(self);
         MemberConnection connection = memberConnectionRepository.lockById(id).orElseThrow(MemberService::notFound);
         boolean recipient = connection.recipient.equals(self);
@@ -158,7 +165,7 @@ class MemberService {
     }
 
     @Transactional(readOnly = true)
-    List<AccountApi.Connection> connections(UUID self, int page) {
+    public List<AccountApi.Connection> connections(UUID self, int page) {
         current(self);
         if (page < 0 || page > 50) throw new ApiException(400, "PAGE_INVALID", "페이지를 확인해주세요.");
         return memberConnectionRepository.listVisible(self, PageRequest.of(page, 20)).stream()
@@ -170,7 +177,7 @@ class MemberService {
         return new AccountApi.Connection(connection.id, other.majungId, other.nickname,
                 connection.status, connection.requester.equals(self) ? "OUTGOING" : "INCOMING");
     }
-    static AccountApi.Profile profile(Member member) {
+    public static AccountApi.Profile profile(Member member) {
         return new AccountApi.Profile(member.id, member.majungId, member.nickname, member.profileReady);
     }
     private void requireLinked(String subject) {

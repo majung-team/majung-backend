@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.push;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,18 +62,18 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.rate-limit.enabled=false"
 })
 @Import({PickupApiTest.TimeConfiguration.class, ArrivalPushTest.FakePushConfiguration.class})
-class ArrivalPushTest {
-    static final String ENDPOINT = "https://fcm.googleapis.com/fcm/send/test-endpoint-1";
+public class ArrivalPushTest {
+    public static final String ENDPOINT = "https://fcm.googleapis.com/fcm/send/test-endpoint-1";
 
     /** Replaces the real VAPID transport so no test talks to a push service. */
     @TestConfiguration
-    static class FakePushConfiguration {
+    public static class FakePushConfiguration {
         @Bean
         @Primary
         FakePush fakePush() { return new FakePush(); }
     }
 
-    static class FakePush implements PushTransport {
+    public static class FakePush implements PushTransport {
         volatile boolean enabled = true;
         volatile Result result = Result.SENT;
         final List<String> sent = new CopyOnWriteArrayList<>();
@@ -72,7 +81,7 @@ class ArrivalPushTest {
         @Override public boolean enabled() { return enabled; }
         @Override public String publicKey() { return "test-public-key"; }
         @Override public Result send(String endpoint) { sent.add(endpoint); return result; }
-        void reset() { enabled = true; result = Result.SENT; sent.clear(); }
+        public void reset() { enabled = true; result = Result.SENT; sent.clear(); }
     }
 
     @LocalServerPort int port;
@@ -82,7 +91,7 @@ class ArrivalPushTest {
     private final HttpClient client = HttpClient.newHttpClient();
     private final JsonMapper json = JsonMapper.builder().build();
 
-    @BeforeEach void reset() { push.reset(); clock.reset(); }
+    @BeforeEach public void reset() { push.reset(); clock.reset(); }
 
     // ---- flow through the pickup API
 
@@ -304,11 +313,11 @@ class ArrivalPushTest {
 
     // ---- helpers
 
-    record Pickup(String id, String owner, String guest) {
+    public record Pickup(String id, String owner, String guest) {
         String path() { return "/api/v1/pickups/" + id; }
     }
 
-    record Response(int status, JsonNode body) { }
+    public record Response(int status, JsonNode body) { }
 
     private Pickup connected() throws Exception {
         Response created = call("POST", "/api/v1/pickups", null,

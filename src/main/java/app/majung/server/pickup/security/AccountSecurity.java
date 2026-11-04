@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.service.*;
 import java.util.List;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.http.HttpClient;
@@ -29,10 +36,10 @@ import org.springframework.security.oauth2.core.user.*;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-class AccountSecurity {
+public class AccountSecurity {
     @Bean
     @ConditionalOnProperty(name = "majung.login.enabled", havingValue = "true")
-    ClientRegistrationRepository kakaoRegistration(
+    public ClientRegistrationRepository kakaoRegistration(
             @Value("${majung.login.kakao-client-id:}") String clientId,
             @Value("${majung.login.kakao-client-secret:}") String clientSecret,
             @Value("${majung.login.redirect-uri:}") String redirectUri,
@@ -52,7 +59,7 @@ class AccountSecurity {
 
     @Bean
     @Order(1)
-    SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members, MeterRegistry metrics,
+    public SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members, MeterRegistry metrics,
             ObjectProvider<OAuth2AuthorizedClientService> authorizedClients,
             @Value("${majung.login.enabled:false}") boolean enabled) throws Exception {
         http.securityMatcher("/api/v1/auth/**", "/api/v1/accounts/**", "/api/v1/connections/**", "/api/v1/vehicle-links/**", "/api/v1/ride-requests/**")
@@ -122,7 +129,7 @@ class AccountSecurity {
 
     @Bean
     @Order(2)
-    SecurityFilterChain pickupTokenSecurity(HttpSecurity http) throws Exception {
+    public SecurityFilterChain pickupTokenSecurity(HttpSecurity http) throws Exception {
         // Existing vehicle/pickup APIs authenticate their explicit bearer tokens in their services.
         return http.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
                 .csrf(AbstractHttpConfigurer::disable).requestCache(AbstractHttpConfigurer::disable)

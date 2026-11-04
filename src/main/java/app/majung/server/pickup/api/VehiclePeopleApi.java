@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
@@ -16,26 +23,26 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "06. 사람 연결 (Vehicle People)", description = "차량 기기와 탑승자 간의 사전 연결(즐겨찾기 탑승자) 관리 API")
 @RestController
 @RequestMapping("/api/v1/vehicles/people")
-class VehiclePeopleApi {
-    record Search(
+public class VehiclePeopleApi {
+    public record Search(
             @Schema(description = "검색된 회원 목록") List<AccountApi.SearchResult> items) { }
 
-    record Connections(
+    public record Connections(
             @Schema(description = "연결된 탑승자 목록") List<AccountApi.Connection> items) { }
 
-    record Result(
+    public record Result(
             @Schema(description = "연결 처리 결과 정보") AccountApi.Connection connection) { }
 
-    record Target(
+    public record Target(
             @Schema(description = "대상 회원 식별자 (UUID)") @NotNull UUID memberId,
             @Schema(description = "운전자 마중 아이디", example = "majung_pilot") @NotBlank String driverMajungId) { }
 
-    record Driver(
+    public record Driver(
             @Schema(description = "운전자 마중 아이디", example = "majung_pilot") @NotBlank String driverMajungId) { }
 
     private final VehiclePeopleService service;
 
-    VehiclePeopleApi(VehiclePeopleService service) {
+    public VehiclePeopleApi(VehiclePeopleService service) {
         this.service = service;
     }
 

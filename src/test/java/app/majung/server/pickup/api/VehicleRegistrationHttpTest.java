@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -27,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.development-tools=false", "majung.rate-limit.enabled=false"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class VehicleRegistrationHttpTest {
+public class VehicleRegistrationHttpTest {
     private static final String ADMIN = "test-admin-key-not-a-secret-0123456789";
     private static final String PLACE = "{\"place\":{\"label\":\"예시 장소\",\"latitude\":37,\"longitude\":127}}";
     @LocalServerPort int port;

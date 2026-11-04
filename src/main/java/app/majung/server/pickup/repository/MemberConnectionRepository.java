@@ -1,12 +1,19 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.repository;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.util.*;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
-interface MemberConnectionRepository extends JpaRepository<MemberConnection, UUID> {
+public interface MemberConnectionRepository extends JpaRepository<MemberConnection, UUID> {
     @Query("select c from MemberConnection c where (c.firstMember = :self or c.secondMember = :self) and c.status = 'ACCEPTED' order by c.updatedAt desc, c.id")
     List<MemberConnection> accepted(@Param("self") UUID self, Pageable pageable);
     @Modifying

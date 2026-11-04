@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -42,7 +50,7 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.login.unlink-cleanup-enabled=false"
 })
 @Import(AccountFlowTest.ProviderFixture.class)
-class AccountFlowTest {
+public class AccountFlowTest {
     static final AtomicLong subject = new AtomicLong(1000);
     static HttpServer provider;
     static {
@@ -71,7 +79,7 @@ class AccountFlowTest {
     }
     @AfterAll static void stopProvider() { provider.stop(0); }
     @TestConfiguration(proxyBeanMethods = false)
-    static class ProviderFixture {
+    public static class ProviderFixture {
         @Bean @Primary ClientRegistrationRepository fixtureRegistration() {
             String origin = "http://127.0.0.1:" + provider.getAddress().getPort();
             return new InMemoryClientRegistrationRepository(ClientRegistration.withRegistrationId("kakao")
@@ -92,7 +100,7 @@ class AccountFlowTest {
     MockMvc mvc;
     final JsonMapper json = JsonMapper.builder().build();
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
-    record Login(MockHttpSession session, String csrf, UUID memberId, String majungId) { }
+    public record Login(MockHttpSession session, String csrf, UUID memberId, String majungId) { }
 
     Login login() throws Exception {
         subject.incrementAndGet();

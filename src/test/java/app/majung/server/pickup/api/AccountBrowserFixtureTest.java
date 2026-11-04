@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -36,7 +44,7 @@ import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
         "majung.login.redirect-uri=https://example.test/api/v1/auth/callback/kakao"
 })
 @Import(AccountBrowserFixtureTest.Provider.class)
-class AccountBrowserFixtureTest {
+public class AccountBrowserFixtureTest {
     @org.springframework.beans.factory.annotation.Autowired MemberService members;
     @org.springframework.beans.factory.annotation.Autowired VehicleRegistrationService registration;
     @org.springframework.beans.factory.annotation.Autowired VehicleAccountService vehicleAccounts;
@@ -63,7 +71,7 @@ class AccountBrowserFixtureTest {
         exchange.getResponseBody().write(bytes); exchange.close();
     }
     @TestConfiguration(proxyBeanMethods = false)
-    static class Provider {
+    public static class Provider {
         @Bean @Primary ClientRegistrationRepository browserRegistration() throws Exception {
             provider = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             provider.createContext("/authorize", exchange -> {

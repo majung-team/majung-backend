@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.common;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import app.majung.server.MajungServerApplication;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -47,7 +54,7 @@ public final class RestoreVerification {
     }
 
     @SuppressWarnings("unchecked")
-    static void verify(ConfigurableApplicationContext context, String origin) throws Exception {
+    public static void verify(ConfigurableApplicationContext context, String origin) throws Exception {
         Member member = new Member();
         member.id = UUID.randomUUID();
         member.provider = "restore-test";

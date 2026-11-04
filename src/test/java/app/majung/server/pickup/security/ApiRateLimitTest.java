@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import app.majung.server.pickup.security.ApiRateLimitFilter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.time.Duration;
@@ -8,7 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
-class ApiRateLimitTest {
+public class ApiRateLimitTest {
     @Test void writesHaveSeparateBudgetAndMinuteBoundaryResetsBoth() {
         PickupApiTest.MutableClock clock = new PickupApiTest.MutableClock();
         clock.reset();

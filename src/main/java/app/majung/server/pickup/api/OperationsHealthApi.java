@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,14 +23,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 /** Publishes availability only. Host details, backup metadata and pickup counts stay on the VM. */
 @Tag(name = "10. 시스템 헬스체크 (Health)")
 @RestController
-class OperationsHealthApi {
-    record Health(
+public class OperationsHealthApi {
+    public record Health(
             @Schema(description = "운영 상태 (UP)", example = "UP") String status) { }
     private final ObjectMapper mapper;
     private final Path state;
     private final Clock clock;
 
-    OperationsHealthApi(ObjectMapper mapper,
+    public OperationsHealthApi(ObjectMapper mapper,
             @Value("${majung.operations-state-file:/var/lib/majung-operations/status.json}") String filename,
             Clock clock) {
         this.mapper = mapper;

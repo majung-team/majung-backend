@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.job;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.time.Clock;
 import java.time.Duration;
 import org.slf4j.Logger;
@@ -12,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnProperty(name = "majung.retention.enabled", havingValue = "true")
-class PickupRetentionJob {
+public class PickupRetentionJob {
     private static final Logger log = LoggerFactory.getLogger(PickupRetentionJob.class);
     private final PickupRepository pickupRepository;
     private final RideRequestRepository rideRequests;
@@ -20,7 +27,7 @@ class PickupRetentionJob {
     private final Clock clock;
     private final Duration retention;
 
-    PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, ArrivalPushService arrivalPush, Clock clock,
+    public PickupRetentionJob(PickupRepository pickupRepository, RideRequestRepository rideRequests, ArrivalPushService arrivalPush, Clock clock,
                        @Value("${majung.retention.period:P7D}") Duration retention) {
         this.pickupRepository = pickupRepository;
         this.rideRequests = rideRequests;

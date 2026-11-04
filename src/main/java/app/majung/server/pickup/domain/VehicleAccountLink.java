@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.domain;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -9,10 +16,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-class VehicleAccountLink {
-    @Id UUID vehicleId;
-    @Version long version;
-    @ManyToOne(optional = false) @JoinColumn(name = "member_id") Member member;
-    Instant linkedAt;
-    protected VehicleAccountLink() { }
+public class VehicleAccountLink {
+    @Id public UUID vehicleId;
+    @Version public long version;
+    @ManyToOne(optional = false) @JoinColumn(name = "member_id") public Member member;
+    public Instant linkedAt;
+    public VehicleAccountLink() { }
 }

@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -31,98 +38,98 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "01. 픽업 (Pickups)", description = "픽업 세션 생성, 초대 참여, 상태/준비 변경, 차량 위치 업데이트 등 실시간 픽업 핵심 API")
 @RestController
 @RequestMapping(value = "/api/v1/pickups", produces = "application/json")
-class PickupApi {
-    record Place(
+public class PickupApi {
+    public record Place(
             @Schema(description = "장소 명칭/라벨", example = "강남역 2번 출구") @NotBlank @Size(max = 120) String label,
             @Schema(description = "위도 (Latitude)", example = "37.4979") @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
             @Schema(description = "경도 (Longitude)", example = "127.0276") @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude) { }
 
-    record CreateRequest(
+    public record CreateRequest(
             @Schema(description = "픽업 약속 장소") @Valid @NotNull Place place) { }
 
-    record JoinRequest(
+    public record JoinRequest(
             @Schema(description = "43자리 URL-safe Base64 초대 토큰", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") @NotBlank @Size(min = 43, max = 43) String inviteToken,
             @Schema(description = "탑승자 표시 닉네임 (최대 12자)", example = "승객1") @Size(max = 12) String displayName) { }
 
-    record ReadinessRequest(
+    public record ReadinessRequest(
             @Schema(description = "탑승 준비 상태 (NOT_READY, READY, COMPLETED)", example = "READY") @NotNull Pickup.Readiness readiness,
             @Schema(description = "상태 전송 시퀀스 번호", example = "1") @Positive long sequence) { }
 
-    record ReadinessReceipt(
+    public record ReadinessReceipt(
             @Schema(description = "확인할 참여자(승객) 식별자 (UUID)") @NotNull UUID participantId,
             @Schema(description = "확인한 시퀀스 번호", example = "1") @Positive long sequence) { }
 
-    record PlaceVersionRequest(
+    public record PlaceVersionRequest(
             @Schema(description = "확인할 장소 버전 번호", example = "1") @NotNull @Positive Long placeVersion) { }
 
-    record VehicleInvalidation(
+    public record VehicleInvalidation(
             @Schema(description = "시퀀스 번호", example = "1") @Positive long sequence,
             @Schema(description = "장소 버전 번호", example = "1") @Positive Long placeVersion) {
         VehicleInvalidation(long sequence) { this(sequence, null); }
     }
 
-    record PlaceConfirmation(
+    public record PlaceConfirmation(
             @Schema(description = "수락할 장소 제안 식별자 (UUID)") @NotNull UUID proposalId,
             @Schema(description = "예상 장소 버전", example = "1") @Positive long expectedPlaceVersion,
             @Schema(description = "확정할 장소 정보") @Valid @NotNull Place place,
             @Schema(description = "예상 이동 소요 시간 (초)", example = "300") @NotNull @PositiveOrZero Long durationSeconds,
             @Schema(description = "측정/전송 시각") @NotNull Instant sourceTime) { }
 
-    record VehicleRequest(
+    public record VehicleRequest(
             @Schema(description = "차량 현재 위도", example = "37.4982") @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
             @Schema(description = "차량 현재 경도", example = "127.0280") @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
             @Schema(description = "도착지까지 예상 소요 시간 (초)", example = "180") @NotNull @PositiveOrZero Long durationSeconds,
             @Schema(description = "위치 측정 시각") @NotNull Instant sourceTime,
             @Schema(description = "위치 갱신 시퀀스", example = "15") @Positive long sequence,
             @Schema(description = "장소 버전", example = "1") @Positive Long placeVersion) {
-        VehicleRequest(Double latitude, Double longitude, Long durationSeconds, Instant sourceTime, long sequence) {
+        public VehicleRequest(Double latitude, Double longitude, Long durationSeconds, Instant sourceTime, long sequence) {
             this(latitude, longitude, durationSeconds, sourceTime, sequence, null);
         }
     }
 
-    record Created(
+    public record Created(
             @Schema(description = "생성된 픽업 세션 식별자 (UUID)") UUID pickupId,
             @Schema(description = "운전자 인증 토큰 (Bearer)") String driverToken,
             @Schema(description = "탑승자 초대용 토큰") String inviteToken,
             @Schema(description = "초대 토큰 만료 시각") Instant inviteExpiresAt,
             @Schema(description = "픽업 세션 전체 만료 시각") Instant expiresAt) { }
 
-    record Invitation(
+    public record Invitation(
             @Schema(description = "새로 발급된 초대 토큰") String inviteToken,
             @Schema(description = "초대 토큰 만료 시각") Instant expiresAt) { }
 
-    record ArrivalPushRequest(
+    public record ArrivalPushRequest(
             @Schema(description = "브라우저/디바이스 웹 푸시 엔드포인트 URL", example = "https://fcm.googleapis.com/fcm/send/...") @NotBlank @Size(max = 1024) String endpoint) { }
 
-    record ArrivalPushState(
+    public record ArrivalPushState(
             @Schema(description = "웹 푸시 구독 여부", example = "true") boolean subscribed) { }
 
-    record Joined(
+    public record Joined(
             @Schema(description = "참여자(승객) 식별자 (UUID)") UUID participantId,
             @Schema(description = "승객 전용 인증 토큰 (Bearer)") String participantToken,
             @Schema(description = "참여 상태", example = "JOINED") String status) { }
 
-    record Participant(
+    public record Participant(
             @Schema(description = "참여자 식별자 (UUID)") UUID participantId,
             @Schema(description = "표시 닉네임", example = "승객1") String displayName,
             @Schema(description = "탑승 준비 상태 (NOT_READY, READY, COMPLETED)", example = "READY") Pickup.Readiness readiness,
             @Schema(description = "준비 상태 시퀀스", example = "1") long readinessSequence,
             @Schema(description = "수신 확인된 시퀀스", example = "1") long readinessReceivedSequence) { }
 
-    record PlaceProposal(
+    public record PlaceProposal(
             @Schema(description = "제안된 장소") Place place,
             @Schema(description = "제안자 (DRIVER 또는 PARTICIPANT)", example = "DRIVER") Pickup.Proposer proposedBy,
             @Schema(description = "제안 시각") Instant proposedAt,
             @Schema(description = "제안 식별자 (UUID)") UUID proposalId) { }
 
-    record QuickMessage(
+    public record QuickMessage(
             @Schema(description = "메시지 본문", example = "곧 도착해요!") String text,
             @Schema(description = "발송 시각") Instant sentAt) { }
 
-    record QuickMessageRequest(
+    public record QuickMessageRequest(
             @Schema(description = "전송할 빠른 메시지 문구 (최대 50자)", example = "지금 정류장 앞이에요!") @NotBlank @Size(max = 50) String message) { }
 
-    record Snapshot(
+    public record Snapshot(
             @Schema(description = "픽업 식별자 (UUID)") UUID pickupId,
             @Schema(description = "픽업 진행 상태 (CREATED, MATCHED, ARRIVED, COMPLETED, CANCELLED)", example = "MATCHED") String status,
             @Schema(description = "확정된 픽업 장소") Place place,
@@ -135,7 +142,7 @@ class PickupApi {
             @Schema(description = "최근 수신된 빠른 메시지") QuickMessage quickMessage,
             @Schema(description = "배정된 차량 명칭", example = "카니발 12가3456") String vehicleName) { }
 
-    record VehicleState(
+    public record VehicleState(
             @Schema(description = "위치 데이터 신선도 (FRESH, STALE)", example = "FRESH") String freshness,
             @Schema(description = "차량 현재 위도", example = "37.4982") Double latitude,
             @Schema(description = "차량 현재 경도", example = "127.0280") Double longitude,
@@ -150,7 +157,7 @@ class PickupApi {
     private final PickupService pickupService;
     private final DeploymentPolicy deploymentPolicy;
 
-    PickupApi(PickupService pickupService, DeploymentPolicy deploymentPolicy) {
+    public PickupApi(PickupService pickupService, DeploymentPolicy deploymentPolicy) {
         this.pickupService = pickupService;
         this.deploymentPolicy = deploymentPolicy;
     }

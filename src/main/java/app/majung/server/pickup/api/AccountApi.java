@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -20,21 +27,21 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "07. 회원 계정 (Accounts)", description = "로그인 세션 확인, 닉네임 설정, 회원 검색 및 상호 연결")
 @RestController
-class AccountApi {
-    record Profile(
+public class AccountApi {
+    public record Profile(
             @Schema(description = "회원 고유 식별자 (UUID)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") UUID memberId,
             @Schema(description = "마중 고유 아이디", example = "majung_pilot") String majungId,
             @Schema(description = "사용자 닉네임", example = "홍길동") String nickname,
             @Schema(description = "프로필 설정 완료 여부", example = "true") boolean profileReady
     ) { }
 
-    record SearchResult(
+    public record SearchResult(
             @Schema(description = "회원 식별자 (UUID)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") UUID memberId,
             @Schema(description = "마중 고유 아이디", example = "driver_kim") String majungId,
             @Schema(description = "사용자 닉네임", example = "김운전") String nickname
     ) { }
 
-    record Connection(
+    public record Connection(
             @Schema(description = "연결 고유 식별자 (UUID)", example = "f47ac10b-58cc-4372-a567-0e02b2c3d479") UUID connectionId,
             @Schema(description = "상대방 마중 아이디", example = "passenger_lee") String majungId,
             @Schema(description = "상대방 닉네임", example = "이탑승") String nickname,
@@ -42,15 +49,15 @@ class AccountApi {
             @Schema(description = "연결 방향 (INCOMING, OUTGOING)", example = "OUTGOING") String direction
     ) { }
 
-    record Nickname(
+    public record Nickname(
             @Schema(description = "새로운 닉네임 (최대 80자)", example = "멋진드라이버") @NotBlank @Size(max = 80) String nickname
     ) { }
 
-    record Target(
+    public record Target(
             @Schema(description = "연결할 대상 회원 식별자 (UUID)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") UUID memberId
     ) { }
 
-    record Session(
+    public record Session(
             @Schema(description = "로그인 기능 활성화 여부", example = "true") boolean loginEnabled,
             @Schema(description = "현재 인증(로그인) 여부", example = "true") boolean authenticated,
             @Schema(description = "로그인된 회원 프로필 정보 (비로그인 시 null)") Profile member,
@@ -60,7 +67,7 @@ class AccountApi {
     private final MemberService memberService;
     private final boolean enabled;
 
-    AccountApi(MemberService memberService, @Value("${majung.login.enabled:false}") boolean enabled) {
+    public AccountApi(MemberService memberService, @Value("${majung.login.enabled:false}") boolean enabled) {
         this.memberService = memberService;
         this.enabled = enabled;
     }

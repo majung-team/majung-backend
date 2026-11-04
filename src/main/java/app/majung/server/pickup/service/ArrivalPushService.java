@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.util.UUID;
@@ -14,7 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** "About three minutes away" web push, sent at most once per confirmed place version. */
 @Service
-class ArrivalPushService {
+public class ArrivalPushService {
     private final ArrivalPushRepository repository;
     private final PushTransport transport;
     private final Clock clock;
@@ -26,7 +33,7 @@ class ArrivalPushService {
         return thread;
     });
 
-    ArrivalPushService(ArrivalPushRepository repository, PushTransport transport, Clock clock,
+    public ArrivalPushService(ArrivalPushRepository repository, PushTransport transport, Clock clock,
                        PlatformTransactionManager transactionManager,
                        @Value("${majung.push.arrival-seconds:180}") long arrivalSeconds) {
         this.repository = repository;
@@ -36,11 +43,11 @@ class ArrivalPushService {
         this.arrivalSeconds = arrivalSeconds;
     }
 
-    boolean enabled() { return transport.enabled(); }
+    public boolean enabled() { return transport.enabled(); }
 
-    String publicKey() { return transport.publicKey(); }
+    public String publicKey() { return transport.publicKey(); }
 
-    void subscribe(UUID pickupId, String endpoint, long placeVersion) {
+    public void subscribe(UUID pickupId, String endpoint, long placeVersion) {
         if (!transport.enabled()) {
             throw new ApiException(404, "PUSH_DISABLED", "이 서버에서는 도착 알림을 사용할 수 없습니다.");
         }
@@ -57,19 +64,19 @@ class ArrivalPushService {
         }
     }
 
-    void rearm(UUID pickupId, long placeVersion) {
+    public void rearm(UUID pickupId, long placeVersion) {
         repository.findById(pickupId).ifPresent(subscription -> {
             subscription.placeVersion = placeVersion;
             subscription.notifiedAt = null;
         });
     }
 
-    void remove(UUID pickupId) { repository.deleteByPickup(pickupId); }
+    public void remove(UUID pickupId) { repository.deleteByPickup(pickupId); }
 
-    int removeCreatedBefore(java.time.Instant cutoff) { return repository.deleteCreatedBefore(cutoff); }
+    public int removeCreatedBefore(java.time.Instant cutoff) { return repository.deleteCreatedBefore(cutoff); }
 
     /** Called inside the telemetry update; the send itself happens after that transaction commits. */
-    void vehicleUpdated(UUID pickupId, Pickup.Status status, Long durationSeconds, long placeVersion) {
+    public void vehicleUpdated(UUID pickupId, Pickup.Status status, Long durationSeconds, long placeVersion) {
         if (!transport.enabled() || status != Pickup.Status.ACTIVE || durationSeconds == null
                 || durationSeconds > arrivalSeconds) {
             return;
@@ -101,5 +108,5 @@ class ArrivalPushService {
     }
 
     @PreDestroy
-    void shutdown() { executor.shutdown(); }
+    public void shutdown() { executor.shutdown(); }
 }

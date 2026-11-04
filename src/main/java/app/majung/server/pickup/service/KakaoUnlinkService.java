@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -14,7 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-class KakaoUnlinkService {
+public class KakaoUnlinkService {
     private static final Logger log = LoggerFactory.getLogger(KakaoUnlinkService.class);
     private final KakaoUnlinkRepository unlinkRepository;
     private final MemberRepository memberRepository;
@@ -30,7 +37,7 @@ class KakaoUnlinkService {
     private final String appId;
     private final boolean cleanupEnabled;
 
-    KakaoUnlinkService(KakaoUnlinkRepository unlinkRepository, MemberRepository memberRepository,
+    public KakaoUnlinkService(KakaoUnlinkRepository unlinkRepository, MemberRepository memberRepository,
             MemberConnectionRepository connectionRepository, VehicleAccountLinkRepository vehicleLinks,
             VehicleAccountChallengeRepository vehicleChallenges, RideRequestRepository rideRequests,
             PickupRepository pickups, ArrivalPushService arrivalPush, PlatformTransactionManager transactions, Clock clock,
@@ -53,7 +60,7 @@ class KakaoUnlinkService {
         this.cleanupEnabled = cleanupEnabled;
     }
 
-    void receive(String authorization, String receivedAppId, String subject, String referrer) {
+    public void receive(String authorization, String receivedAppId, String subject, String referrer) {
         if (adminKey.isBlank() || appId.isBlank())
             throw new ApiException(503, "UNLINK_NOT_CONFIGURED", "연결 해제 처리를 준비 중이에요.");
         if (authorization == null || authorization.length() > 512
@@ -78,7 +85,7 @@ class KakaoUnlinkService {
     }
 
     @Scheduled(fixedDelayString = "${majung.login.unlink-cleanup-interval-ms:5000}", initialDelay = 5000)
-    void cleanup() {
+    public void cleanup() {
         if (!ActiveDeploymentJobs.allowed()) return;
         if (!cleanupEnabled) return;
         for (KakaoUnlink event : unlinkRepository.findAll(PageRequest.of(0, 20))) {
@@ -90,7 +97,7 @@ class KakaoUnlinkService {
         }
     }
 
-    void cleanupOne(String subject) {
+    public void cleanupOne(String subject) {
         transaction.executeWithoutResult(status -> {
             if (unlinkRepository.lockBySubject(subject).isEmpty()) return;
             memberRepository.findByProviderAndProviderSubject("kakao", subject).ifPresent(candidate -> {

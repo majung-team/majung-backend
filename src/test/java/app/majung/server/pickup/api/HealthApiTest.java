@@ -1,12 +1,20 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-class HealthApiTest {
+public class HealthApiTest {
     @Test void databaseAvailabilityAndReleaseRevisionAreReported() {
         JdbcTemplate database = mock(JdbcTemplate.class);
         when(database.queryForObject("SELECT 1", Integer.class)).thenReturn(1);

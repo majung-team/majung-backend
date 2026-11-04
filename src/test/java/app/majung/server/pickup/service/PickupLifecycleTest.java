@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.UUID;
@@ -16,13 +25,13 @@ import org.springframework.context.annotation.Import;
     "majung.expiration.interval-ms=3600000", "majung.rate-limit.enabled=false"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class PickupLifecycleTest {
+public class PickupLifecycleTest {
     @Autowired PickupService service;
     @Autowired PickupRepository pickups;
     @Autowired PickupExpirationJob job;
     @Autowired ArrivalPushRepository pushSubscriptions;
     @Autowired PickupApiTest.MutableClock clock;
-    record Session(UUID id, String owner, String guest) { }
+    public record Session(UUID id, String owner, String guest) { }
     @BeforeEach void reset() { pushSubscriptions.deleteAll(); pickups.deleteAll(); clock.reset(); }
     Session active() {
         var created = service.createPickup(new PickupApi.Place("시험 장소",37.0,127.0),null);

@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.job;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.time.Clock;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -9,12 +16,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** Each pickup is locked separately; scanning never holds a vehicle or driver account lock. */
 @Service
-class PickupExpirationJob {
+public class PickupExpirationJob {
     private final PickupRepository pickups;
     private final Clock clock;
     private final ArrivalPushService arrivalPush;
     private final TransactionTemplate transaction;
-    PickupExpirationJob(PickupRepository pickups, Clock clock, ArrivalPushService arrivalPush, PlatformTransactionManager manager) {
+    public PickupExpirationJob(PickupRepository pickups, Clock clock, ArrivalPushService arrivalPush, PlatformTransactionManager manager) {
         this.pickups = pickups;
         this.clock = clock;
         this.arrivalPush = arrivalPush;
@@ -22,7 +29,7 @@ class PickupExpirationJob {
         this.transaction.setTimeout(5);
     }
     @Scheduled(fixedDelayString = "${majung.expiration.interval-ms:60000}", initialDelayString = "${majung.expiration.interval-ms:60000}")
-    int expireDuePickups() {
+    public int expireDuePickups() {
         if (!ActiveDeploymentJobs.allowed()) return 0;
         int expired = 0;
         java.util.UUID after = null;

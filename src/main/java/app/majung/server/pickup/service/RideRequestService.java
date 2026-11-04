@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Comparator;
@@ -13,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Requests belong to people; only an approved driver account can assign a vehicle. */
 @Service
 @Transactional
-class RideRequestService {
+public class RideRequestService {
     private final RideRequestRepository requests;
     private final MemberService members;
     private final MemberRepository memberRepository;
@@ -27,14 +34,14 @@ class RideRequestService {
     private final MemberConnectionRepository connections;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
     @org.springframework.beans.factory.annotation.Value("${majung.vehicle-freshness}") private Duration vehicleFreshness;
-    RideRequestService(RideRequestRepository requests, MemberService members, MemberRepository memberRepository,
+    public RideRequestService(RideRequestRepository requests, MemberService members, MemberRepository memberRepository,
             VehicleAccountLinkRepository links, VehicleRegistrationService registration, RegisteredVehicleRepository vehicles,
             PickupRepository pickups, PickupService pickupService, TokenService tokens, Clock clock, MemberConnectionRepository connections) {
         this.requests=requests; this.members=members; this.memberRepository=memberRepository; this.links=links;
         this.registration=registration; this.vehicles=vehicles; this.pickups=pickups; this.pickupService=pickupService;
         this.tokens=tokens; this.clock=clock; this.connections=connections;
     }
-    List<RideRequestApi.Contact> contacts(String auth, int page) {
+    public List<RideRequestApi.Contact> contacts(String auth, int page) {
         UUID driver = deviceDriver(auth);
         if (page < 0 || page > 50) throw error(400, "PAGE_INVALID", "페이지를 확인해주세요.");
         return connections.accepted(driver, PageRequest.of(page, 20)).stream().map(connection -> {
@@ -45,7 +52,7 @@ class RideRequestService {
             } catch (ApiException failure) { if (failure.status == 401) return null; throw failure; }
         }).filter(Objects::nonNull).toList();
     }
-    RideRequestApi.View invite(String auth, RideRequestApi.Invite input) {
+    public RideRequestApi.View invite(String auth, RideRequestApi.Invite input) {
         RegisteredVehicle vehicle = registration.requireActive(auth);
         UUID driver = driverForVehicle(vehicle.id); driverLock(driver); ready(driver);
         MemberConnection connection = connections.findById(input.connectionId()).orElseThrow(RideRequestService::notFound);
@@ -74,7 +81,7 @@ class RideRequestService {
         catch (org.springframework.dao.DataIntegrityViolationException collision) { throw conflict("초대 번호가 이미 사용됐어요. 목록을 확인해주세요."); }
         return view(request, true);
     }
-    RideRequestApi.View answerInvitation(UUID self, UUID id, boolean accept) {
+    public RideRequestApi.View answerInvitation(UUID self, UUID id, boolean accept) {
         ready(self);
         RideRequest hint = requests.findById(id).orElseThrow(RideRequestService::notFound);
         if (!hint.passengerId.equals(self) || !hint.driverInvitation) throw notFound();
@@ -85,7 +92,7 @@ class RideRequestService {
         if (accept) enqueue(hint); else { hint.status = "REJECTED"; hint.endedAt = clock.instant(); }
         return view(hint, false);
     }
-    RideRequestApi.View cancelInvitation(String auth, UUID id) {
+    public RideRequestApi.View cancelInvitation(String auth, UUID id) {
         UUID driver = deviceDriver(auth); RideRequest request = owned(driver, id);
         if (!request.driverInvitation) throw notFound();
         if (state(request).equals("CANCELLED")) return view(request, true);
@@ -113,7 +120,7 @@ class RideRequestService {
         request.status = "QUEUED";
         request.expiresAt = clock.instant().plus(Duration.ofHours(2));
     }
-    RideRequestApi.View submit(UUID self, RideRequestApi.Submit input) {
+    public RideRequestApi.View submit(UUID self, RideRequestApi.Submit input) {
         ready(self);
         if (self.equals(input.driverId())) throw error(400, "SELF_REQUEST", "본인에게 마중을 요청할 수 없어요.");
         driverLock(input.driverId());
@@ -142,18 +149,18 @@ class RideRequestService {
         catch (org.springframework.dao.DataIntegrityViolationException collision) { throw conflict("요청 번호가 이미 사용됐어요. 목록을 확인해주세요."); }
         return view(request, false);
     }
-    List<RideRequestApi.View> passenger(UUID self) {
+    public List<RideRequestApi.View> passenger(UUID self) {
         members.current(self);
         return requests.passengerRequests(self, PageRequest.of(0, 50)).stream().map(request -> view(request, false)).toList();
     }
-    List<RideRequestApi.View> received(String auth) {
+    public List<RideRequestApi.View> received(String auth) {
         UUID driver = deviceDriver(auth);
         return requests.findByDriverIdOrderByCreatedAtAscIdAsc(driver).stream().filter(this::open)
                 .sorted(Comparator.comparing((RideRequest r) -> r.queueOrder == null ? Long.MAX_VALUE : r.queueOrder)
                         .thenComparing(r -> r.createdAt).thenComparing(r -> r.id))
                 .map(request -> view(request, true)).toList();
     }
-    RideRequestApi.View accept(String auth, UUID id) {
+    public RideRequestApi.View accept(String auth, UUID id) {
         UUID driver=deviceDriver(auth); RideRequest request=owned(driver,id);
         ready(request.passengerId);
         String state=state(request);
@@ -162,13 +169,13 @@ class RideRequestService {
         enqueue(request);
         return view(request,true);
     }
-    RideRequestApi.View reject(String auth, UUID id) {
+    public RideRequestApi.View reject(String auth, UUID id) {
         UUID driver=deviceDriver(auth); RideRequest request=owned(driver,id);
         if (state(request).equals("REJECTED")) return view(request,true);
         if (!state(request).equals("PENDING")) throw conflict("응답 대기 중인 요청만 거절할 수 있어요.");
         request.status="REJECTED"; request.endedAt=clock.instant(); return view(request,true);
     }
-    RideRequestApi.View cancel(UUID self, UUID id) {
+    public RideRequestApi.View cancel(UUID self, UUID id) {
         members.current(self); RideRequest hint=requests.findById(id).orElseThrow(RideRequestService::notFound);
         if (!hint.passengerId.equals(self)) throw notFound();
         driverLock(hint.driverId); entityManager.refresh(hint); RideRequest request=hint;
@@ -178,7 +185,7 @@ class RideRequestService {
         if (state(request).equals("ACTIVE")) throw conflict("진행 중인 픽업의 취소는 운전자에게 요청해주세요.");
         request.status="CANCELLED"; request.endedAt=clock.instant(); return view(request,false);
     }
-    RideRequestApi.Started start(String auth, UUID id) {
+    public RideRequestApi.Started start(String auth, UUID id) {
         RegisteredVehicle vehicle=registration.requireActive(auth);
         UUID driver=driverForVehicle(vehicle.id); driverLock(driver); ready(driver);
         RideRequest request=owned(driver,id); ready(request.passengerId);
@@ -201,27 +208,27 @@ class RideRequestService {
         request.pickupId=created.pickupId(); request.vehicleId=vehicle.id; request.status="ACTIVE";
         return new RideRequestApi.Started(created.pickupId(),created.driverToken(),snapshot);
     }
-    RideRequestApi.Tracking tracking(UUID self,UUID id) {
+    public RideRequestApi.Tracking tracking(UUID self,UUID id) {
         RideRequest request=passengerActive(self,id);
         return new RideRequestApi.Tracking(pickupService.snapshotForAccount(request.pickupId),pickupService.vehicleForAccount(request.pickupId));
     }
-    PickupApi.ArrivalPushState subscribeArrivalPush(UUID self,UUID id,String endpoint) {
+    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID self,UUID id,String endpoint) {
         return pickupService.subscribeArrivalPushForAccount(passengerActive(self,id).pickupId,endpoint);
     }
-    PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID self,UUID id) {
+    public PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID self,UUID id) {
         return pickupService.unsubscribeArrivalPushForAccount(passengerActive(self,id).pickupId);
     }
-    PickupApi.Snapshot proposePlace(UUID self,UUID id,PickupApi.Place place) {
+    public PickupApi.Snapshot proposePlace(UUID self,UUID id,PickupApi.Place place) {
         return pickupService.proposePlaceForAccount(passengerActive(self,id).pickupId,place);
     }
-    PickupApi.Snapshot withdrawPlaceProposal(UUID self,UUID id) {
+    public PickupApi.Snapshot withdrawPlaceProposal(UUID self,UUID id) {
         return pickupService.withdrawPlaceProposalForAccount(passengerActive(self,id).pickupId);
     }
-    PickupApi.Snapshot readiness(UUID self,UUID id,PickupApi.ReadinessRequest input) {
+    public PickupApi.Snapshot readiness(UUID self,UUID id,PickupApi.ReadinessRequest input) {
         RideRequest request=passengerActive(self,id);
         return pickupService.readinessForAccount(request.pickupId,input);
     }
-    PickupApi.Snapshot quickMessage(UUID self, UUID id, String message) {
+    public PickupApi.Snapshot quickMessage(UUID self, UUID id, String message) {
         RideRequest request = passengerActive(self, id);
         return pickupService.sendQuickMessageForAccount(request.pickupId, message);
     }

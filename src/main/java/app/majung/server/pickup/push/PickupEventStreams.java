@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.push;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.List;
@@ -17,8 +24,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** Bounded snapshot streams. Rechecks authorization on every read; stores no replay history. */
 @Service
-class PickupEventStreams {
-    record State(PickupApi.Snapshot pickup, PickupApi.VehicleState vehicle) {
+public class PickupEventStreams {
+    public record State(PickupApi.Snapshot pickup, PickupApi.VehicleState vehicle) {
         Object revision() {
             return List.of(pickup, vehicle.freshness(), vehicle.sequence(), vehicle.placeVersion(), vehicle.latitude() != null);
         }
@@ -33,7 +40,7 @@ class PickupEventStreams {
     private volatile boolean stopping;
     private final java.util.Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
 
-    SseEmitter open(UUID id, Supplier<State> read) {
+    public SseEmitter open(UUID id, Supplier<State> read) {
         State initial = read.get(); // Reject invalid credentials before starting an HTTP stream.
         synchronized (this) {
             if (stopping) throw new ApiException(503, "STREAM_PAUSED", "서버 연결을 다시 준비하고 있어요.");
@@ -96,7 +103,7 @@ class PickupEventStreams {
     }
 
     @org.springframework.context.event.EventListener(org.springframework.context.event.ContextClosedEvent.class)
-    void closing() {
+    public void closing() {
         stopping = true;
         emitters.forEach(SseEmitter::complete);
     }

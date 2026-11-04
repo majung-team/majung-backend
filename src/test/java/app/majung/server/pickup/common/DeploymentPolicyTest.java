@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.common;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -7,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
-class DeploymentPolicyTest {
+public class DeploymentPolicyTest {
     private static final String TEST_KEY = "test-only-not-a-real-key-0123456789";
 
     @Test void localCreationDoesNotNeedKey() {

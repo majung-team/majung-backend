@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,29 +27,29 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "11. 다중 픽업 계획 & 경로 최적화 (Pickup Plans)", description = "다중 탑승자 픽업 계획 수립, 경로 최적화(TSP) 추천, 개별 ETA 및 경유지 순차 처리 API")
 @RestController
 @RequestMapping(value = "/api/v1/pickup-plans", produces = "application/json")
-class PickupPlanApi {
+public class PickupPlanApi {
 
-    record CreatePlanRequest(
+    public record CreatePlanRequest(
             @Schema(description = "픽업 계획 명칭", example = "출근길 판교행 카풀 셔틀") @Size(max = 64) String planName,
             @Schema(description = "운전자 출발지 장소 정보") @Valid @NotNull PickupApi.Place origin,
             @Schema(description = "최종 목적지 장소 정보") @Valid @NotNull PickupApi.Place destination,
             @Schema(description = "계획에 포함할 사전 마중 요청 식별자 목록 (UUIDs, 옵션)") List<UUID> rideRequestIds) {}
 
-    record AddStopRequest(
+    public record AddStopRequest(
             @Schema(description = "탑승자 회원 식별자 (UUID)", example = "bbbbbbbb-1111-2222-3333-444444444441") @NotNull UUID passengerId,
             @Schema(description = "탑승자 닉네임", example = "김승객") @NotBlank String passengerNickname,
             @Schema(description = "픽업 희망 장소") @Valid @NotNull PickupApi.Place place,
             @Schema(description = "연결된 마중 요청 식별자 (UUID, 옵션)") UUID rideRequestId,
             @Schema(description = "운전자가 희망하는 방문 순서 (1부터 시작, 미입력 시 자동 배정)", example = "1") Integer preferredOrder) {}
 
-    record OptimizeRequest(
+    public record OptimizeRequest(
             @Schema(description = "최적화 기준 알고리즘 (MIN_DURATION: 전체 이동 시간 최소화, MIN_DISTANCE: 최단 거리)", example = "MIN_DURATION") String algorithm,
             @Schema(description = "탑승자의 준비 완료(READY) 여부를 최적화 순서에 우선 반영할지 여부", example = "true") Boolean considerReadiness) {}
 
-    record ConfirmRouteRequest(
+    public record ConfirmRouteRequest(
             @Schema(description = "확정할 경로 추천 리비전 식별자 (UUID)", example = "cccccccc-1111-2222-3333-444444444444") @NotNull UUID revisionId) {}
 
-    record StopView(
+    public record StopView(
             @Schema(description = "경유지 식별자 (UUID)") UUID stopId,
             @Schema(description = "탑승자 식별자 (UUID)") UUID passengerId,
             @Schema(description = "탑승자 닉네임", example = "김승객") String passengerNickname,
@@ -52,7 +59,7 @@ class PickupPlanApi {
             @Schema(description = "경유지 상태 (PENDING, READY, ARRIVED, COMPLETED, CANCELLED)", example = "READY") String status,
             @Schema(description = "예상 도착 시각 (경로 확정 시 계산)") Instant estimatedArrivalAt) {}
 
-    record RouteView(
+    public record RouteView(
             @Schema(description = "경로 추천 리비전 식별자 (UUID)") UUID revisionId,
             @Schema(description = "최적화된 경유지 ID 순서 목록") List<UUID> orderedStopIds,
             @Schema(description = "전체 예상 운행 시간 (초)", example = "1920") long totalDurationSeconds,
@@ -60,7 +67,7 @@ class PickupPlanApi {
             @Schema(description = "운전자 최종 확정 여부", example = "true") boolean confirmed,
             @Schema(description = "경로 계산 일시") Instant calculatedAt) {}
 
-    record PlanView(
+    public record PlanView(
             @Schema(description = "픽업 계획 식별자 (UUID)") UUID planId,
             @Schema(description = "픽업 계획 명칭", example = "출근길 판교행 카풀 셔틀") String planName,
             @Schema(description = "운전자 회원 식별자 (UUID)") UUID driverId,
@@ -74,7 +81,7 @@ class PickupPlanApi {
             @Schema(description = "계획 생성 일시") Instant createdAt,
             @Schema(description = "최종 수정 일시") Instant updatedAt) {}
 
-    record PassengerEta(
+    public record PassengerEta(
             @Schema(description = "탑승자 회원 식별자 (UUID)") UUID passengerId,
             @Schema(description = "탑승자 닉네임", example = "김승객") String nickname,
             @Schema(description = "내 픽업 방문 순서", example = "2") int stopOrder,
@@ -84,13 +91,13 @@ class PickupPlanApi {
             @Schema(description = "내 앞에 먼저 탑승할 인원 수", example = "1") int peopleAhead,
             @Schema(description = "탑승자 현재 상태 (PENDING, READY, ARRIVED, COMPLETED)", example = "READY") String status) {}
 
-    record EtaOverview(
+    public record EtaOverview(
             @Schema(description = "픽업 계획 식별자 (UUID)") UUID planId,
             @Schema(description = "계획 진행 상태", example = "CONFIRMED") String planStatus,
             @Schema(description = "탑승자별 개별 ETA 목록") List<PassengerEta> passengerEtas,
             @Schema(description = "ETA 갱신 시각") Instant updatedAt) {}
 
-    record StopCompletionResult(
+    public record StopCompletionResult(
             @Schema(description = "픽업 계획 식별자 (UUID)") UUID planId,
             @Schema(description = "방금 탑승 완료된 경유지 식별자 (UUID)") UUID completedStopId,
             @Schema(description = "다음 픽업할 경유지 식별자 (남은 경유지가 없으면 null)") UUID nextStopId,
@@ -100,7 +107,7 @@ class PickupPlanApi {
 
     private final PickupPlanService planService;
 
-    PickupPlanApi(PickupPlanService planService) {
+    public PickupPlanApi(PickupPlanService planService) {
         this.planService = planService;
     }
 

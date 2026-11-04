@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
         "majung.rate-limit.enabled=false"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class PlaceProposalTest {
+public class PlaceProposalTest {
     private static final Map<String, Object> PLACE = Map.of("label", "예시 장소", "latitude", 37.0, "longitude", 127.0);
     private static final Map<String, Object> OTHER = Map.of("label", "정문 앞", "latitude", 37.001, "longitude", 127.002);
 

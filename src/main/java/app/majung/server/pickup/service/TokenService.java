@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,16 +16,16 @@ import java.util.HexFormat;
 import org.springframework.stereotype.Component;
 
 @Component
-class TokenService {
+public class TokenService {
     private final SecureRandom random = new SecureRandom();
 
-    String issue() {
+    public String issue() {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    String hash(String token) {
+    public String hash(String token) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(token.getBytes(StandardCharsets.UTF_8)));
@@ -27,7 +34,7 @@ class TokenService {
         }
     }
 
-    boolean matches(String token, String storedHash) {
+    public boolean matches(String token, String storedHash) {
         if (token == null || token.length() != 43 || storedHash == null) {
             return false;
         }
@@ -35,7 +42,7 @@ class TokenService {
                 storedHash.getBytes(StandardCharsets.US_ASCII));
     }
 
-    String bearer(String header) {
+    public String bearer(String header) {
         if (header == null || !header.startsWith("Bearer ") || header.length() != 50) {
             throw new ApiException(401, "UNAUTHORIZED", "픽업 접근 토큰이 필요합니다.");
         }

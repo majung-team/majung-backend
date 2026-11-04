@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class PickupPlanApiTest {
+public class PickupPlanApiTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-03T06:00:00Z"), ZoneId.of("UTC"));
     private final PickupPlanService service = new PickupPlanService(clock);

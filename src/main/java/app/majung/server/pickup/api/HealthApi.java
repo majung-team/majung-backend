@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.core.io.ClassPathResource;
@@ -14,8 +21,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "10. 시스템 헬스체크 (Health)", description = "서비스 가동 상태, DB 연결 상태 및 Blue-Green 무중단 배포 슬롯 점검 API")
 @RestController
-class HealthApi {
-    record Health(
+public class HealthApi {
+    public record Health(
             @Schema(description = "서비스 상태 (UP, DOWN)", example = "UP") String status,
             @Schema(description = "배포된 Git 커밋 해시 리비전", example = "4ca8abdfe18b9ce34f2d5e2e4ef1572d424b9588") String revision,
             @Schema(description = "현재 트래픽을 수신 중인 배포 슬롯 (blue, green, standalone)", example = "blue") String slot) { }
@@ -23,7 +30,7 @@ class HealthApi {
     private final JdbcTemplate database;
     private final String revision;
 
-    HealthApi(JdbcTemplate database) {
+    public HealthApi(JdbcTemplate database) {
         this.database = database;
         String value = "local";
         ClassPathResource resource = new ClassPathResource("majung-release.txt");

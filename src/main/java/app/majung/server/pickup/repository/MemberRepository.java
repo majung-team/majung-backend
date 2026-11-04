@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.repository;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -8,7 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
-interface MemberRepository extends JpaRepository<Member, UUID> {
+public interface MemberRepository extends JpaRepository<Member, UUID> {
     Optional<Member> findByProviderAndProviderSubject(String provider, String providerSubject);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from Member m where m.id = :id")

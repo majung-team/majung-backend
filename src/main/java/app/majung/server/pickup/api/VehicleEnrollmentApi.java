@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -16,20 +23,20 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "05. 차량 등록 관리 (Vehicle Enrollment)", description = "차량 디스플레이와 스마트폰 계정 간의 기기 등록 및 연동 세션 관리 API")
 @RestController
-class VehicleEnrollmentApi {
-    record Started(
+public class VehicleEnrollmentApi {
+    public record Started(
             @Schema(description = "등록 세션 식별자 (UUID)") UUID enrollmentId,
             @Schema(description = "임시 기기 인증 토큰") String deviceToken,
             @Schema(description = "43자리 등록 코드", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") String code,
             @Schema(description = "만료 시각") Instant expiresAt) { }
 
-    record Claim(
+    public record Claim(
             @Schema(description = "스캔 또는 입력한 43자리 코드", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") @NotNull @Pattern(regexp = "[A-Za-z0-9_-]{43}") String code) { }
 
-    record Confirm(
+    public record Confirm(
             @Schema(description = "승인할 대상 마중 아이디", example = "majung_pilot") @NotNull String majungId) { }
 
-    record State(
+    public record State(
             @Schema(description = "등록 세션 식별자 (UUID)") UUID enrollmentId,
             @Schema(description = "진행 상태 (PENDING, CLAIMED, CONFIRMED, CANCELLED)", example = "PENDING") String status,
             @Schema(description = "요청자 닉네임", example = "김운전") String nickname,
@@ -38,7 +45,7 @@ class VehicleEnrollmentApi {
 
     private final VehicleEnrollmentService service;
 
-    VehicleEnrollmentApi(VehicleEnrollmentService service) {
+    public VehicleEnrollmentApi(VehicleEnrollmentService service) {
         this.service = service;
     }
 

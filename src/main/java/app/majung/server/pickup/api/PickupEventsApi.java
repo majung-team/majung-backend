@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -21,12 +28,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "08. 실시간 이벤트 SSE (Pickup Events)", description = "픽업 및 마중 상태 변경 실시간 서버 전송 이벤트(Server-Sent Events) 스트림 API")
 @RestController
-class PickupEventsApi {
+public class PickupEventsApi {
     private final PickupService pickups;
     private final RideRequestService rides;
     private final PickupEventStreams streams;
 
-    PickupEventsApi(PickupService pickups, RideRequestService rides, PickupEventStreams streams) {
+    public PickupEventsApi(PickupService pickups, RideRequestService rides, PickupEventStreams streams) {
         this.pickups = pickups;
         this.rides = rides;
         this.streams = streams;
@@ -56,7 +63,7 @@ class PickupEventsApi {
             @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자 (로그인 필요)")
     })
     @GetMapping(value = "/api/v1/ride-requests/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    SseEmitter account(@Parameter(description = "마중 요청 식별자 (UUID)") @PathVariable UUID id,
+    public SseEmitter account(@Parameter(description = "마중 요청 식별자 (UUID)") @PathVariable UUID id,
                        @Parameter(hidden = true) Authentication authentication,
                        @Parameter(hidden = true) HttpServletRequest request,
                        @Parameter(hidden = true) HttpServletResponse response) {

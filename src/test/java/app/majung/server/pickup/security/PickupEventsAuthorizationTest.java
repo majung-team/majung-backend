@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -19,7 +28,7 @@ import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-class PickupEventsAuthorizationTest {
+public class PickupEventsAuthorizationTest {
     @Test void accountStreamStopsWhenSessionEndsOrChangesAccount() {
         UUID member = UUID.randomUUID(), requestId = UUID.randomUUID();
         var roles = List.of(new SimpleGrantedAuthority("ROLE_USER"));

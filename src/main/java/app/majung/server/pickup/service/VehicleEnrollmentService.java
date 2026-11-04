@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
@@ -10,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Device secret never enters the QR/browser. No vehicle authority exists before both confirmations. */
 @Service
 @Transactional
-class VehicleEnrollmentService {
+public class VehicleEnrollmentService {
     private final VehicleEnrollmentRepository enrollments;
     private final RegisteredVehicleRepository vehicles;
     private final VehicleAccountLinkRepository links;
@@ -20,13 +27,13 @@ class VehicleEnrollmentService {
     private final TokenService tokens;
     private final Clock clock;
 
-    VehicleEnrollmentService(VehicleEnrollmentRepository enrollments, RegisteredVehicleRepository vehicles,
+    public VehicleEnrollmentService(VehicleEnrollmentRepository enrollments, RegisteredVehicleRepository vehicles,
             VehicleAccountLinkRepository links, MemberRepository members, MemberService accounts,
             VehicleRegistrationService registration, TokenService tokens, Clock clock) {
         this.enrollments=enrollments; this.vehicles=vehicles; this.links=links; this.members=members;
         this.accounts=accounts; this.registration=registration; this.tokens=tokens; this.clock=clock;
     }
-    VehicleEnrollmentApi.Started start() {
+    public VehicleEnrollmentApi.Started start() {
         String secret=tokens.issue(); String code=tokens.issue();
         VehicleEnrollment enrollment=new VehicleEnrollment();
         enrollment.id=UUID.randomUUID(); enrollment.deviceHash=tokens.hash(secret); enrollment.codeHash=tokens.hash(code);
@@ -34,7 +41,7 @@ class VehicleEnrollmentService {
         enrollments.save(enrollment);
         return new VehicleEnrollmentApi.Started(enrollment.id, secret, code, enrollment.expiresAt);
     }
-    VehicleEnrollmentApi.State device(UUID id, String authorization) {
+    public VehicleEnrollmentApi.State device(UUID id, String authorization) {
         VehicleEnrollment enrollment=deviceRecord(id, authorization);
         if (enrollment.confirmedAt != null) {
             RegisteredVehicle vehicle=registration.requireActive(authorization);
@@ -43,7 +50,7 @@ class VehicleEnrollmentService {
         } else requireLive(enrollment);
         return state(enrollment);
     }
-    VehicleEnrollmentApi.State claim(UUID memberId, UUID id, String code) {
+    public VehicleEnrollmentApi.State claim(UUID memberId, UUID id, String code) {
         Member member=readyMember(memberId);
         VehicleEnrollment enrollment=live(id);
         if (!tokens.matches(code, enrollment.codeHash) || enrollment.confirmedAt != null) throw unavailable();
@@ -52,7 +59,7 @@ class VehicleEnrollmentService {
         enrollment.claimantId=member.id;
         return state(enrollment);
     }
-    VehicleEnrollmentApi.State confirm(UUID id, String authorization, String expectedMajungId) {
+    public VehicleEnrollmentApi.State confirm(UUID id, String authorization, String expectedMajungId) {
         VehicleEnrollment hint=enrollments.findById(id).orElseThrow(VehicleEnrollmentService::unavailable);
         if (hint.claimantId == null) throw unavailable();
         Member member=readyMember(hint.claimantId);
@@ -74,7 +81,7 @@ class VehicleEnrollmentService {
         enrollment.confirmedAt=clock.instant();
         return state(enrollment);
     }
-    VehicleEnrollmentApi.State account(UUID memberId, UUID id) {
+    public VehicleEnrollmentApi.State account(UUID memberId, UUID id) {
         accounts.current(memberId);
         VehicleEnrollment enrollment=live(id);
         if (!memberId.equals(enrollment.claimantId)) throw unavailable();
@@ -85,11 +92,11 @@ class VehicleEnrollmentService {
         }
         return state(enrollment);
     }
-    VehicleEnrollmentApi.State cancelDevice(UUID id, String authorization) {
+    public VehicleEnrollmentApi.State cancelDevice(UUID id, String authorization) {
         VehicleEnrollment enrollment=deviceRecord(id, authorization);
         cancel(enrollment); return state(enrollment);
     }
-    VehicleEnrollmentApi.State cancelAccount(UUID memberId, UUID id) {
+    public VehicleEnrollmentApi.State cancelAccount(UUID memberId, UUID id) {
         accounts.current(memberId);
         VehicleEnrollment enrollment=live(id);
         if (!memberId.equals(enrollment.claimantId)) throw unavailable();
@@ -125,7 +132,7 @@ class VehicleEnrollmentService {
                 member == null ? null : member.majungId,enrollment.expiresAt);
     }
     @Scheduled(fixedDelay=60000)
-    void purgeExpired() {
+    public void purgeExpired() {
         if (ActiveDeploymentJobs.allowed()) enrollments.deleteExpired(clock.instant().minus(Duration.ofHours(1)));
     }
     private static ApiException unavailable() {

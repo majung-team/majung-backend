@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
-class PickupService {
+public class PickupService {
     private static final String DEFAULT_PARTICIPANT_NAME = "탑승자";
     private final PickupRepository pickupRepository;
     private final RideRequestRepository rideRequestRepository;
@@ -26,7 +33,7 @@ class PickupService {
     private final Duration vehicleFreshness;
     private final Duration vehicleLastKnown;
 
-    PickupService(PickupRepository pickupRepository, RideRequestRepository rideRequestRepository,
+    public PickupService(PickupRepository pickupRepository, RideRequestRepository rideRequestRepository,
                   RegisteredVehicleRepository registeredVehicleRepository,
                   ArrivalPushService arrivalPush,
                   TokenService tokenService, Clock clock,
@@ -54,7 +61,7 @@ class PickupService {
         this.vehicleLastKnown = vehicleLastKnown;
     }
 
-    PickupApi.Created createPickup(PickupApi.Place place, String authorization) {
+    public PickupApi.Created createPickup(PickupApi.Place place, String authorization) {
         RegisteredVehicle vehicle = authorization == null && deploymentPolicy.developmentToolsEnabled()
                 ? null : vehicleRegistrationService.requireActive(authorization);
         Instant now = clock.instant();
@@ -67,7 +74,7 @@ class PickupService {
         return new PickupApi.Created(pickup.id, ownerToken, inviteToken, pickup.inviteExpiresAt, pickup.expiresAt);
     }
 
-    PickupApi.Joined joinPickup(UUID id, PickupApi.JoinRequest request) {
+    public PickupApi.Joined joinPickup(UUID id, PickupApi.JoinRequest request) {
         Pickup pickup = locked(id);
         requireOpen(pickup);
         if (!clock.instant().isBefore(pickup.inviteExpiresAt) || pickup.inviteHash == null) {
@@ -91,7 +98,7 @@ class PickupService {
         return new PickupApi.Joined(pickup.participantId, guestToken, pickup.status.name());
     }
 
-    PickupApi.Invitation rotateInvitation(UUID id, String auth) {
+    public PickupApi.Invitation rotateInvitation(UUID id, String auth) {
         Pickup pickup = owner(id, auth);
         requireOpen(pickup);
         if (pickup.status != Pickup.Status.INVITING && pickup.status != Pickup.Status.WAITING_APPROVAL) {
@@ -101,7 +108,7 @@ class PickupService {
     }
 
     // Only the driver can disconnect the current passenger; the passenger's token stops working immediately.
-    PickupApi.Invitation disconnectParticipant(UUID id, String auth) {
+    public PickupApi.Invitation disconnectParticipant(UUID id, String auth) {
         Pickup pickup = owner(id, auth);
         requireOpen(pickup);
         if (rideRequestRepository.existsByPickupId(id)) {
@@ -135,7 +142,7 @@ class PickupService {
         return new PickupApi.Invitation(inviteToken, pickup.inviteExpiresAt);
     }
 
-    PickupApi.Snapshot approveParticipant(UUID id, UUID participantId, String auth) {
+    public PickupApi.Snapshot approveParticipant(UUID id, UUID participantId, String auth) {
         Pickup pickup = owner(id, auth);
         requireOpen(pickup);
         if (!Objects.equals(pickup.participantId, participantId)) {
@@ -155,7 +162,7 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
-    PickupApi.Snapshot getPickup(UUID id, String auth) {
+    public PickupApi.Snapshot getPickup(UUID id, String auth) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         boolean isOwner = tokenService.matches(token, pickup.ownerHash);
@@ -165,7 +172,7 @@ class PickupService {
         return toPickupResponse(pickup, isOwner);
     }
 
-    PickupApi.Snapshot updateReadiness(UUID id, String auth, PickupApi.ReadinessRequest request) {
+    public PickupApi.Snapshot updateReadiness(UUID id, String auth, PickupApi.ReadinessRequest request) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         if (!tokenService.matches(token, pickup.participantHash)) {
@@ -190,7 +197,7 @@ class PickupService {
         }
     }
 
-    PickupApi.Snapshot confirmPlace(UUID id, String auth, PickupApi.PlaceConfirmation request) {
+    public PickupApi.Snapshot confirmPlace(UUID id, String auth, PickupApi.PlaceConfirmation request) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
         if (Objects.equals(request.proposalId(), pickup.confirmedProposalId)
@@ -219,7 +226,7 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
-    PickupApi.Snapshot receiveReadiness(UUID id, String auth, PickupApi.ReadinessReceipt request) {
+    public PickupApi.Snapshot receiveReadiness(UUID id, String auth, PickupApi.ReadinessReceipt request) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
         // Participant identity prevents a delayed receipt from confirming a replacement passenger's sequence.
@@ -233,7 +240,7 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
-    PickupApi.VehicleState updateVehicle(UUID id, String auth, PickupApi.VehicleRequest request) {
+    public PickupApi.VehicleState updateVehicle(UUID id, String auth, PickupApi.VehicleRequest request) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
         requirePlaceVersion(pickup, request.placeVersion());
@@ -263,11 +270,11 @@ class PickupService {
         return toVehicleResponse(pickup);
     }
 
-    PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence) {
+    public PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence) {
         return invalidateVehicle(id, auth, sequence, null);
     }
 
-    PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence, Long placeVersion) {
+    public PickupApi.VehicleState invalidateVehicle(UUID id, String auth, long sequence, Long placeVersion) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
         requirePlaceVersion(pickup, placeVersion);
@@ -282,11 +289,11 @@ class PickupService {
         return toVehicleResponse(pickup);
     }
 
-    PickupEventStreams.State streamState(UUID id, String auth) {
+    public PickupEventStreams.State streamState(UUID id, String auth) {
         return new PickupEventStreams.State(getPickup(id, auth), getVehicle(id, auth));
     }
 
-    PickupApi.VehicleState getVehicle(UUID id, String auth) {
+    public PickupApi.VehicleState getVehicle(UUID id, String auth) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         if (!tokenService.matches(token, pickup.ownerHash)
@@ -297,9 +304,9 @@ class PickupService {
         return toVehicleResponse(pickup);
     }
 
-    PickupApi.Snapshot arrivePickup(UUID id, String auth) { return arrivePickup(id, auth, null); }
+    public PickupApi.Snapshot arrivePickup(UUID id, String auth) { return arrivePickup(id, auth, null); }
 
-    PickupApi.Snapshot arrivePickup(UUID id, String auth, Long placeVersion) {
+    public PickupApi.Snapshot arrivePickup(UUID id, String auth, Long placeVersion) {
         Pickup pickup = owner(id, auth);
         requireSharing(pickup);
         requirePlaceVersion(pickup, placeVersion);
@@ -309,7 +316,7 @@ class PickupService {
         return toPickupResponse(pickup, true);
     }
 
-    PickupApi.Snapshot endPickup(UUID id, String auth, Pickup.Status target) {
+    public PickupApi.Snapshot endPickup(UUID id, String auth, Pickup.Status target) {
         Pickup pickup = owner(id, auth);
         if (pickup.status == target) {
             return toPickupResponse(pickup, true);
@@ -328,7 +335,7 @@ class PickupService {
     }
 
     // Both sides may suggest a place. The confirmed place never changes here; the driver decides separately.
-    PickupApi.Snapshot proposePlace(UUID id, String auth, PickupApi.Place place) {
+    public PickupApi.Snapshot proposePlace(UUID id, String auth, PickupApi.Place place) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         boolean isOwner = tokenService.matches(token, pickup.ownerHash);
@@ -338,7 +345,7 @@ class PickupService {
         return applyProposal(pickup, isOwner ? Pickup.Proposer.DRIVER : Pickup.Proposer.PASSENGER, place, isOwner);
     }
 
-    PickupApi.Snapshot withdrawPlaceProposal(UUID id, String auth) {
+    public PickupApi.Snapshot withdrawPlaceProposal(UUID id, String auth) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         boolean isOwner = tokenService.matches(token, pickup.ownerHash);
@@ -348,11 +355,11 @@ class PickupService {
         return dropProposal(pickup, isOwner ? null : Pickup.Proposer.PASSENGER, isOwner);
     }
 
-    PickupApi.Snapshot proposePlaceForAccount(UUID id, PickupApi.Place place) {
+    public PickupApi.Snapshot proposePlaceForAccount(UUID id, PickupApi.Place place) {
         return applyProposal(locked(id), Pickup.Proposer.PASSENGER, place, false);
     }
 
-    PickupApi.Snapshot withdrawPlaceProposalForAccount(UUID id) {
+    public PickupApi.Snapshot withdrawPlaceProposalForAccount(UUID id) {
         return dropProposal(locked(id), Pickup.Proposer.PASSENGER, false);
     }
 
@@ -384,7 +391,7 @@ class PickupService {
         return toPickupResponse(pickup, isOwner);
     }
 
-    PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, String endpoint) {
+    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, String endpoint) {
         Pickup pickup = locked(id);
         if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
             throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 신청할 수 있습니다.");
@@ -394,7 +401,7 @@ class PickupService {
         return new PickupApi.ArrivalPushState(true);
     }
 
-    PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID id, String auth) {
+    public PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID id, String auth) {
         Pickup pickup = locked(id);
         if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
             throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 바꿀 수 있습니다.");
@@ -404,14 +411,14 @@ class PickupService {
     }
 
     // Account-side variants: RideRequestService has already checked the signed-in passenger and active request.
-    PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, String endpoint) {
+    public PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, String endpoint) {
         Pickup pickup = locked(id);
         requireSharing(pickup);
         arrivalPush.subscribe(pickup.id, endpoint, pickup.placeVersion);
         return new PickupApi.ArrivalPushState(true);
     }
 
-    PickupApi.ArrivalPushState unsubscribeArrivalPushForAccount(UUID id) {
+    public PickupApi.ArrivalPushState unsubscribeArrivalPushForAccount(UUID id) {
         arrivalPush.remove(id);
         return new PickupApi.ArrivalPushState(false);
     }
@@ -419,14 +426,14 @@ class PickupService {
     // Called only after RideRequestService has checked the signed-in passenger and active request.
     PickupApi.Snapshot snapshotForAccount(UUID id) { return toPickupResponse(locked(id), false); }
     PickupApi.VehicleState vehicleForAccount(UUID id) { Pickup pickup=locked(id); requireSharing(pickup); return toVehicleResponse(pickup); }
-    PickupApi.Snapshot readinessForAccount(UUID id, PickupApi.ReadinessRequest request) {
+    public PickupApi.Snapshot readinessForAccount(UUID id, PickupApi.ReadinessRequest request) {
         Pickup pickup=locked(id); requireSharing(pickup);
         if (request.sequence()==pickup.readinessSequence && request.readiness()==pickup.readiness) return toPickupResponse(pickup,false);
         if (request.sequence()<=pickup.readinessSequence) throw error(409,"STALE_EVENT","준비 상태를 다시 확인해주세요.");
         pickup.readiness=request.readiness(); pickup.readinessSequence=request.sequence(); return toPickupResponse(pickup,false);
     }
 
-    PickupApi.Snapshot sendQuickMessage(UUID id, String auth, String message) {
+    public PickupApi.Snapshot sendQuickMessage(UUID id, String auth, String message) {
         String token = tokenService.bearer(auth);
         Pickup pickup = locked(id);
         boolean isOwner = tokenService.matches(token, pickup.ownerHash);
@@ -436,7 +443,7 @@ class PickupService {
         return applyQuickMessage(pickup, message, isOwner);
     }
 
-    PickupApi.Snapshot sendQuickMessageForAccount(UUID id, String message) {
+    public PickupApi.Snapshot sendQuickMessageForAccount(UUID id, String message) {
         return applyQuickMessage(locked(id), message, false);
     }
 

@@ -1,5 +1,13 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -40,7 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "majung.rate-limit.enabled=false"
 })
-class PickupApiTest {
+public class PickupApiTest {
     @LocalServerPort
     int port;
     @Autowired
@@ -51,7 +59,7 @@ class PickupApiTest {
     private final JsonMapper json = JsonMapper.builder().build();
 
     @TestConfiguration
-    static class TimeConfiguration {
+    public static class TimeConfiguration {
         @Bean
         @Primary
         MutableClock testClock() {
@@ -59,11 +67,11 @@ class PickupApiTest {
         }
     }
 
-    static class MutableClock extends Clock {
+    public static class MutableClock extends Clock {
         private final AtomicReference<Instant> now = new AtomicReference<>(Instant.now());
 
-        void reset() { now.set(Instant.parse("2026-10-23T03:00:00Z")); }
-        void advance(Duration duration) { now.updateAndGet(value -> value.plus(duration)); }
+        public void reset() { now.set(Instant.parse("2026-10-23T03:00:00Z")); }
+        public void advance(Duration duration) { now.updateAndGet(value -> value.plus(duration)); }
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }
         @Override public Clock withZone(ZoneId zone) { return this; }
         @Override public Instant instant() { return now.get(); }
@@ -521,9 +529,9 @@ class PickupApiTest {
         assertFalse(response.body().has("trace"));
     }
 
-    record Response(int status, JsonNode body, String cacheControl) { }
-    record Session(String id, String owner, String invite) {
+    public record Response(int status, JsonNode body, String cacheControl) { }
+    public record Session(String id, String owner, String invite) {
         String path() { return "/api/v1/pickups/" + id; }
     }
-    record Guest(String id, String token) { }
+    public record Guest(String id, String token) { }
 }

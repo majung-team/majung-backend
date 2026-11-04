@@ -1,5 +1,15 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.push.ArrivalPushTest;
+
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -29,7 +39,7 @@ import org.springframework.web.context.WebApplicationContext;
     "majung.login.kakao-admin-key=fixture-admin-key", "majung.login.kakao-app-id=fixture-app-id"
 })
 @Import({PickupApiTest.TimeConfiguration.class, ArrivalPushTest.FakePushConfiguration.class})
-class RideRequestTest {
+public class RideRequestTest {
     static final AtomicLong subjects=new AtomicLong(900000);
     @Autowired RideRequestService service;
     @Autowired VehicleAccountService links;
@@ -42,7 +52,7 @@ class RideRequestTest {
     @Autowired WebApplicationContext context;
     @org.junit.jupiter.api.BeforeEach void resetClock() { clock.reset(); }
     Member member() { Member m=members.login(""+subjects.incrementAndGet()); members.nickname(m.id,"가상회원"); return m; }
-    record Driver(Member member,String auth) { }
+    public record Driver(Member member,String auth) { }
     Driver driver() {
         Member m=member(); var code=vehicles.issueCode(); String auth="Bearer "+vehicles.register(new VehicleRegistrationApi.Registration(code.code(),"시험 차량")).vehicleToken();
         var qr=links.issue(auth); links.claim(m.id,new VehicleAccountApi.Claim(qr.challengeId(),qr.code())); links.confirm(auth,qr.challengeId());

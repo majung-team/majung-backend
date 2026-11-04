@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.service;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
@@ -8,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
-class VehicleRegistrationService {
+public class VehicleRegistrationService {
     private final RegisteredVehicleRepository registeredVehicleRepository;
     private final VehicleRegistrationCodeRepository vehicleRegistrationCodeRepository;
     private final PickupRepository pickupRepository;
@@ -16,7 +23,7 @@ class VehicleRegistrationService {
     private final TokenService tokenService;
     private final Clock clock;
 
-    VehicleRegistrationService(RegisteredVehicleRepository registeredVehicleRepository,
+    public VehicleRegistrationService(RegisteredVehicleRepository registeredVehicleRepository,
                                VehicleRegistrationCodeRepository vehicleRegistrationCodeRepository,
                                PickupRepository pickupRepository, ArrivalPushService arrivalPush,
                                TokenService tokenService, Clock clock) {
@@ -28,7 +35,7 @@ class VehicleRegistrationService {
         this.clock = clock;
     }
 
-    VehicleRegistrationApi.IssuedCode issueCode() {
+    public VehicleRegistrationApi.IssuedCode issueCode() {
         String code = tokenService.issue();
         VehicleRegistrationCode record = new VehicleRegistrationCode();
         record.id = UUID.randomUUID();
@@ -38,7 +45,7 @@ class VehicleRegistrationService {
         return new VehicleRegistrationApi.IssuedCode(record.id, code, record.expiresAt);
     }
 
-    VehicleRegistrationApi.Registered register(VehicleRegistrationApi.Registration request) {
+    public VehicleRegistrationApi.Registered register(VehicleRegistrationApi.Registration request) {
         VehicleRegistrationCode code = vehicleRegistrationCodeRepository.findLockedByCodeHash(tokenService.hash(request.code()))
                 .orElseThrow(VehicleRegistrationService::unavailableCode);
         if (code.consumedAt != null || !clock.instant().isBefore(code.expiresAt)) throw unavailableCode();
@@ -54,13 +61,13 @@ class VehicleRegistrationService {
         return new VehicleRegistrationApi.Registered(vehicle.id, credential);
     }
 
-    VehicleRegistrationApi.CodeStatus codeStatus(UUID id) {
+    public VehicleRegistrationApi.CodeStatus codeStatus(UUID id) {
         VehicleRegistrationCode code = vehicleRegistrationCodeRepository.findById(id)
                 .orElseThrow(() -> new ApiException(404, "REGISTRATION_CODE_NOT_FOUND", "등록 코드 기록을 찾을 수 없습니다."));
         return new VehicleRegistrationApi.CodeStatus(code.id, code.expiresAt, code.consumedAt, code.vehicleId);
     }
 
-    RegisteredVehicle requireActive(String authorization) {
+    public RegisteredVehicle requireActive(String authorization) {
         if (authorization == null) throw new ApiException(401, "VEHICLE_REGISTRATION_REQUIRED", "차량 최초 등록이 필요합니다.");
         String credential = tokenService.bearer(authorization);
         RegisteredVehicle vehicle = registeredVehicleRepository.findLockedByCredentialHash(tokenService.hash(credential))
@@ -71,12 +78,12 @@ class VehicleRegistrationService {
         return vehicle;
     }
 
-    VehicleRegistrationApi.VehicleInfo current(String authorization) {
+    public VehicleRegistrationApi.VehicleInfo current(String authorization) {
         RegisteredVehicle vehicle = requireActive(authorization);
         return new VehicleRegistrationApi.VehicleInfo(vehicle.id, vehicle.displayName, vehicle.registeredAt, vehicle.revokedAt);
     }
 
-    VehicleRegistrationApi.VehicleInfo revoke(UUID id) {
+    public VehicleRegistrationApi.VehicleInfo revoke(UUID id) {
         RegisteredVehicle vehicle = registeredVehicleRepository.findLockedById(id)
                 .orElseThrow(() -> new ApiException(404, "VEHICLE_NOT_FOUND", "등록된 차량을 찾을 수 없습니다."));
         if (vehicle.revokedAt == null) {

@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -13,9 +20,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "07. 회원 계정 (Accounts)")
 @RestController
-class KakaoUnlinkApi {
+public class KakaoUnlinkApi {
     private final KakaoUnlinkService unlinkService;
-    KakaoUnlinkApi(KakaoUnlinkService unlinkService) { this.unlinkService = unlinkService; }
+    public KakaoUnlinkApi(KakaoUnlinkService unlinkService) { this.unlinkService = unlinkService; }
 
     @Operation(summary = "카카오 연결 끊기 웹훅 콜백", description = "사용자가 카카오 계정 설정에서 앱 연결을 해제했을 때 카카오 인증 서버에서 호출되는 서버 간 웹훅 콜백입니다.")
     @ApiResponses({

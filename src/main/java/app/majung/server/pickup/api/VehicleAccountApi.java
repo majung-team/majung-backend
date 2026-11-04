@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.api;
 
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -25,41 +32,41 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "03. 차량-계정 연동 (Vehicle Accounts)", description = "차량 디스플레이 QR 코드를 통한 운전자 계정 연동 및 승인/해제 API")
 @RestController
-class VehicleAccountApi {
-    record Challenge(
+public class VehicleAccountApi {
+    public record Challenge(
             @Schema(description = "연동 챌린지 식별자 (UUID)") UUID challengeId,
             @Schema(description = "43자리 일회용 연동 코드 (QR 내용)", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") String code,
             @Schema(description = "코드 만료 시각") Instant expiresAt) { }
 
-    record Claim(
+    public record Claim(
             @Schema(description = "연동 챌린지 식별자 (UUID)") @NotNull UUID challengeId,
             @Schema(description = "스캔한 43자리 코드", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") @NotNull @Pattern(regexp = "[A-Za-z0-9_-]{43}") String code) { }
 
-    record Confirm(
+    public record Confirm(
             @Schema(description = "승인할 연동 챌린지 식별자 (UUID)") @NotNull UUID challengeId) { }
 
-    record DeviceView(
+    public record DeviceView(
             @Schema(description = "기기 연동 진행 상태 (AWAITING_CLAIM, AWAITING_CONFIRM, LINKED)", example = "AWAITING_CLAIM") String status,
             @Schema(description = "챌린지 식별자 (UUID)") UUID challengeId,
             @Schema(description = "연동 요청 회원 닉네임", example = "김운전") String nickname,
             @Schema(description = "연동 요청 회원 마중 아이디", example = "driver_kim") String majungId,
             @Schema(description = "만료 시각") Instant expiresAt) { }
 
-    record RequestView(
+    public record RequestView(
             @Schema(description = "챌린지 식별자 (UUID)") UUID challengeId,
             @Schema(description = "차량 식별자 (UUID)") UUID vehicleId,
             @Schema(description = "차량 명칭", example = "카니발 12가3456") String vehicleName,
             @Schema(description = "진행 상태", example = "AWAITING_CONFIRM") String status,
             @Schema(description = "만료 시각") Instant expiresAt) { }
 
-    record LinkView(
+    public record LinkView(
             @Schema(description = "연동된 차량 식별자 (UUID)") UUID vehicleId,
             @Schema(description = "차량 명칭", example = "카니발 12가3456") String vehicleName,
             @Schema(description = "연동 완료 시각") Instant linkedAt) { }
 
     private final VehicleAccountService service;
 
-    VehicleAccountApi(VehicleAccountService service) {
+    public VehicleAccountApi(VehicleAccountService service) {
         this.service = service;
     }
 

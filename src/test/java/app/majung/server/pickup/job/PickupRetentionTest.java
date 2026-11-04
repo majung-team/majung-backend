@@ -1,5 +1,14 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.job;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
+import app.majung.server.pickup.api.PickupApiTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
         "majung.retention.cleanup-interval-ms=3600000"
 })
 @Import(PickupApiTest.TimeConfiguration.class)
-class PickupRetentionTest {
+public class PickupRetentionTest {
     @Autowired PickupRetentionJob job;
     @Autowired PickupRepository pickupRepository;
     @Autowired PickupApiTest.MutableClock clock;

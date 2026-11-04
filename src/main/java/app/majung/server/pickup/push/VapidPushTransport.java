@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.push;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
@@ -25,7 +32,7 @@ import org.springframework.stereotype.Component;
 
 /** Web Push with VAPID (RFC 8292) and no payload, so no content encryption is involved. */
 @Component
-class VapidPushTransport implements PushTransport {
+public class VapidPushTransport implements PushTransport {
     private static final Logger log = LoggerFactory.getLogger(VapidPushTransport.class);
     private static final Base64.Encoder URL = Base64.getUrlEncoder().withoutPadding();
     private static final Duration TOKEN_LIFETIME = Duration.ofHours(12);
@@ -36,7 +43,7 @@ class VapidPushTransport implements PushTransport {
     private final HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(5)).build();
 
-    VapidPushTransport(Clock clock,
+    public VapidPushTransport(Clock clock,
                        @Value("${majung.push.vapid-public-key:}") String publicKey,
                        @Value("${majung.push.vapid-private-key:}") String privateKey,
                        @Value("${majung.push.subject:}") String subject) {

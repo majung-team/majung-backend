@@ -1,5 +1,12 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.common;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.repository.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -8,11 +15,11 @@ import org.springframework.stereotype.Component;
 
 /** Administrator bootstrap key stays on the server; it cannot create pickups. */
 @Component
-class DeploymentPolicy {
+public class DeploymentPolicy {
     private final String creationKey;
     private final boolean developmentToolsEnabled;
 
-    DeploymentPolicy(@Value("${majung.deployment:false}") boolean deployment,
+    public DeploymentPolicy(@Value("${majung.deployment:false}") boolean deployment,
                      @Value("${majung.admin-key:${majung.creation-key:}}") String creationKey,
                      @Value("${majung.development-tools:true}") boolean developmentTools,
                      @Value("${majung.retention.enabled:false}") boolean retentionEnabled,
@@ -28,9 +35,9 @@ class DeploymentPolicy {
         this.developmentToolsEnabled = developmentTools && creationKey.isEmpty();
     }
 
-    boolean developmentToolsEnabled() { return developmentToolsEnabled; }
+    public boolean developmentToolsEnabled() { return developmentToolsEnabled; }
 
-    void requireAdmin(String authorization) {
+    public void requireAdmin(String authorization) {
         String supplied = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
         if (creationKey.isEmpty()) throw new ApiException(403, "ADMIN_DISABLED", "관리자 기능이 설정되지 않았습니다.");
         if (supplied == null || supplied.length() != creationKey.length()
