@@ -1,4 +1,4 @@
-package app.majung.server.pickup;
+package app.majung.server.pickup.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -17,7 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /** Bounded, per-process fixed windows. Trust the socket peer, not forwarded headers. */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
-class ApiRateLimitFilter extends OncePerRequestFilter {
+public class ApiRateLimitFilter extends OncePerRequestFilter {
     private static final long WINDOW_MILLIS = 60_000;
     private final Clock clock;
     private final boolean enabled;
@@ -34,7 +34,7 @@ class ApiRateLimitFilter extends OncePerRequestFilter {
         Window(long started) { this.started = started; }
     }
 
-    ApiRateLimitFilter(Clock clock, @Value("${majung.rate-limit.enabled:true}") boolean enabled,
+    public ApiRateLimitFilter(Clock clock, @Value("${majung.rate-limit.enabled:true}") boolean enabled,
                        @Value("${majung.rate-limit.requests-per-minute:240}") int requestsPerMinute,
                        @Value("${majung.rate-limit.writes-per-minute:90}") int writesPerMinute,
                        @Value("${majung.rate-limit.max-clients:10000}") int maxClients) {
@@ -76,7 +76,7 @@ class ApiRateLimitFilter extends OncePerRequestFilter {
                 + request.getAttribute("requestId") + "\"}");
     }
 
-    synchronized int acquire(String peer, boolean write) {
+    public synchronized int acquire(String peer, boolean write) {
         long now = clock.millis();
         if (now >= nextSweep) {
             clients.values().removeIf(window -> now - window.started >= WINDOW_MILLIS);
