@@ -247,7 +247,7 @@ cd majung-backend
 ./gradlew test bootJar
 ```
 
-### 서버 실행
+### 서버 실행 및 확인
 
 필요한 로컬 설정을 준비한 후 실행한다.
 
@@ -255,11 +255,13 @@ cd majung-backend
 ./gradlew bootRun
 ```
 
-기본 로컬 API 주소:
+실행 후 브라우저 또는 터미널에서 다음 주소로 즉시 확인할 수 있다:
 
-```text id="ukno3r"
-http://127.0.0.1:8080
-```
+| 항목 | 로컬 개발 주소 | 운영 서버 주소 |
+| --- | --- | --- |
+| 서비스 API 루트 | `http://127.0.0.1:8080` | `https://majung.cloud` |
+| Swagger UI 명세서 | `http://127.0.0.1:8080/api/swagger-ui/index.html` | `https://majung.cloud/api/swagger-ui/index.html` |
+| 헬스체크 및 슬롯 | `http://127.0.0.1:8080/api/v1/health` | `https://majung.cloud/api/v1/health` |
 
 로컬 환경에서는 서버와 웹을 별도로 실행한다.
 
