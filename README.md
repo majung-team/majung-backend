@@ -217,6 +217,26 @@ Spring Boot와 의존성 버전은 현재 `build.gradle.kts`를 기준으로 한
 
 연결이 끊기거나 재연결되는 경우에도 서버의 현재 상태를 다시 확인하도록 구성한다.
 
+### 패키지 및 아키텍처 구조
+
+마중 백엔드는 단일 계층에 클래스가 집중되지 않도록 도메인과 책임에 따라 계층화된 패키지 구조를 갖추고 있다.
+
+```text
+src/main/java/app/majung/server/
+├── MajungServerApplication.java
+└── pickup/
+    ├── api/           # HTTP REST Controller, 요청·응답 DTO 및 SSE 스트림
+    ├── service/       # 픽업·계정·차량 등 핵심 비즈니스 로직 및 트랜잭션 서비스
+    ├── domain/        # JPA 엔티티, 도메인 모델, 열거형 및 불변 값 객체(VO)
+    ├── repository/    # Spring Data JPA 리포지토리 인터페이스
+    ├── security/      # 세션 인증 필터, API Rate Limit 필터, 보안 설정
+    ├── job/           # 주기적 스케줄링 작업 (배포 상태 동기화 등)
+    ├── push/          # 웹 푸시 및 FCM 알림 발송 클라이언트
+    └── common/        # 전역 예외 처리(Advice), 공통 응답 및 유틸리티
+```
+
+테스트 코드(`src/test/java/app/majung/server/pickup/`) 역시 위 메인 패키지 구조와 1:1로 대응되도록 `api`, `service`, `domain`, `repository`, `security`, `job`, `push` 디렉토리로 분리되어 관리된다.
+
 ---
 
 ## 4. 로컬 개발 환경
