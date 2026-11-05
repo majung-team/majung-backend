@@ -212,8 +212,12 @@ public class RideRequestService {
         RideRequest request=passengerActive(self,id);
         return new RideRequestApi.Tracking(pickupService.snapshotForAccount(request.pickupId),pickupService.vehicleForAccount(request.pickupId));
     }
-    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID self,UUID id,String endpoint) {
-        return pickupService.subscribeArrivalPushForAccount(passengerActive(self,id).pickupId,endpoint);
+    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID self, UUID id, String endpoint) {
+        return subscribeArrivalPush(self, id, new PickupApi.ArrivalPushRequest(endpoint));
+    }
+
+    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID self, UUID id, PickupApi.ArrivalPushRequest request) {
+        return pickupService.subscribeArrivalPushForAccount(passengerActive(self,id).pickupId, request, id);
     }
     public PickupApi.ArrivalPushState unsubscribeArrivalPush(UUID self,UUID id) {
         return pickupService.unsubscribeArrivalPushForAccount(passengerActive(self,id).pickupId);

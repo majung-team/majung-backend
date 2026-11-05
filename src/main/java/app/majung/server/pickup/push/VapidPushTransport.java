@@ -30,13 +30,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Web Push with VAPID (RFC 8292) and no payload, so no content encryption is involved. */
+/** Web Push with VAPID and RFC 8291 encrypted event context; bounded HTTP transport. */
 @Component
 public class VapidPushTransport implements PushTransport {
     private static final Logger log = LoggerFactory.getLogger(VapidPushTransport.class);
     private static final Base64.Encoder URL = Base64.getUrlEncoder().withoutPadding();
     private static final Duration TOKEN_LIFETIME = Duration.ofHours(12);
     private final Clock clock;
+    private final nl.martijndwars.webpush.PushService encrypted;
     private final String publicKey;
     private final String subject;
     private final PrivateKey privateKey;
@@ -52,6 +53,7 @@ public class VapidPushTransport implements PushTransport {
             this.publicKey = null;
             this.subject = null;
             this.privateKey = null;
+            this.encrypted = null;
             return;
         }
         // Half-configured push is a deployment mistake; fail at startup without echoing any secret.
@@ -71,6 +73,11 @@ public class VapidPushTransport implements PushTransport {
         }
         this.publicKey = publicKey.strip();
         this.subject = subject;
+        try {
+            if (java.security.Security.getProvider("BC") == null)
+                java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+            this.encrypted = new nl.martijndwars.webpush.PushService(publicKey.strip(), privateKey.strip(), subject);
+        } catch (GeneralSecurityException e) { throw new IllegalArgumentException("Invalid web push configuration"); }
     }
 
     @Override
@@ -99,6 +106,30 @@ public class VapidPushTransport implements PushTransport {
             return Result.FAILED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return Result.FAILED;
+        }
+    }
+
+    @Override
+    public Result send(String endpoint, String p256dh, String auth, String payload) {
+        if (!enabled()) return Result.FAILED;
+        if (p256dh == null || auth == null) return send(endpoint);
+        try {
+            // Use the library's RFC 8291 encryption, retaining our bounded HTTP client and no redirects.
+            var notification = new nl.martijndwars.webpush.Notification(endpoint, p256dh, auth,
+                    payload.getBytes(StandardCharsets.UTF_8), 60);
+            var prepared = encrypted.preparePost(notification, nl.martijndwars.webpush.Encoding.AES128GCM);
+            var request = HttpRequest.newBuilder(URI.create(endpoint)).timeout(Duration.ofSeconds(8));
+            for (var header : prepared.getAllHeaders()) request.header(header.getName(), header.getValue());
+            request.header("Urgency", "high");
+            var response = client.send(request.POST(HttpRequest.BodyPublishers.ofByteArray(
+                    prepared.getEntity().getContent().readAllBytes())).build(), HttpResponse.BodyHandlers.discarding());
+            int status = response.statusCode();
+            return status >= 200 && status < 300 ? Result.SENT : status == 404 || status == 410 ? Result.GONE : Result.FAILED;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); return Result.FAILED;
+        } catch (Exception e) {
+            log.warn("Encrypted arrival push failed: {}", e.getClass().getSimpleName());
             return Result.FAILED;
         }
     }

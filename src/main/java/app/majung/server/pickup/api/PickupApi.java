@@ -99,7 +99,10 @@ public class PickupApi {
             @Schema(description = "초대 토큰 만료 시각") Instant expiresAt) { }
 
     public record ArrivalPushRequest(
-            @Schema(description = "브라우저/디바이스 웹 푸시 엔드포인트 URL", example = "https://fcm.googleapis.com/fcm/send/...") @NotBlank @Size(max = 1024) String endpoint) { }
+            @Schema(description = "브라우저/디바이스 웹 푸시 엔드포인트 URL", example = "https://fcm.googleapis.com/fcm/send/...") @NotBlank @Size(max = 1024) String endpoint,
+            @Size(max = 100) String p256dh, @Size(max = 30) String auth) {
+        public ArrivalPushRequest(String endpoint) { this(endpoint, null, null); }
+    }
 
     public record ArrivalPushState(
             @Schema(description = "웹 푸시 구독 여부", example = "true") boolean subscribed) { }
@@ -206,7 +209,7 @@ public class PickupApi {
     ArrivalPushState subscribeArrivalPush(@Parameter(description = "픽업 식별자 (UUID)") @PathVariable UUID id,
                                           @Parameter(description = "인증 헤더") @RequestHeader(value = "Authorization", required = false) String auth,
                                           @Valid @RequestBody ArrivalPushRequest request) {
-        return pickupService.subscribeArrivalPush(id, auth, request.endpoint());
+        return pickupService.subscribeArrivalPush(id, auth, request);
     }
 
     @Operation(summary = "도착 알림 웹 푸시 구독 해제", description = "등록된 차량 도착 웹 푸시 알림을 해제합니다.")

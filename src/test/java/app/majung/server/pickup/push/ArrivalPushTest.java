@@ -76,12 +76,14 @@ public class ArrivalPushTest {
     public static class FakePush implements PushTransport {
         volatile boolean enabled = true;
         volatile Result result = Result.SENT;
+        final List<String> payloads = new CopyOnWriteArrayList<>();
         final List<String> sent = new CopyOnWriteArrayList<>();
 
         @Override public boolean enabled() { return enabled; }
         @Override public String publicKey() { return "test-public-key"; }
         @Override public Result send(String endpoint) { sent.add(endpoint); return result; }
-        public void reset() { enabled = true; result = Result.SENT; sent.clear(); }
+        @Override public Result send(String endpoint, String key, String auth, String payload) { payloads.add(payload); return send(endpoint); }
+        public void reset() { enabled = true; result = Result.SENT; sent.clear(); payloads.clear(); }
     }
 
     @LocalServerPort int port;
@@ -213,6 +215,33 @@ public class ArrivalPushTest {
         assertEquals("test-public-key", call("GET", "/api/v1/config", null, null).body().path("webPushPublicKey").asText());
     }
 
+    @Test
+    void actualArrivalIsSeparateFromApproachingAndCarriesOnlyThePickupRoute() throws Exception {
+        Pickup pickup=connected();
+        var generator=KeyPairGenerator.getInstance("EC");
+        generator.initialize(new ECGenParameterSpec("secp256r1"));
+        ECPublicKey key=(ECPublicKey)generator.generateKeyPair().getPublic();
+        byte[] point=new byte[65]; point[0]=4;
+        System.arraycopy(fixed(key.getW().getAffineX()),0,point,1,32);
+        System.arraycopy(fixed(key.getW().getAffineY()),0,point,33,32);
+        var encoder=Base64.getUrlEncoder().withoutPadding();
+        assertEquals(200,call("PUT",pickup.path()+"/arrival-push",pickup.guest,Map.of(
+            "endpoint",ENDPOINT,"p256dh",encoder.encodeToString(point),"auth",encoder.encodeToString(new byte[16]))).status());
+        vehicle(pickup,1,100);
+        await(()->push.payloads.size()==1);
+        assertTrue(push.payloads.get(0).contains("APPROACHING"));
+        assertEquals(200,call("POST",pickup.path()+"/arrival",pickup.owner,null).status());
+        await(()->push.payloads.size()==2);
+        assertTrue(push.payloads.get(1).contains("ARRIVED"));
+        assertTrue(push.payloads.get(1).contains("/?pickup="+pickup.id));
+        assertFalse(push.payloads.get(1).contains(pickup.guest));
+        assertFalse(push.payloads.get(1).contains("latitude"));
+        call("POST",pickup.path()+"/arrival",pickup.owner,null);
+        Thread.sleep(200);
+        assertEquals(2,push.payloads.size());
+        assertEquals(400,call("PUT",pickup.path()+"/arrival-push",pickup.guest,Map.of("endpoint",ENDPOINT,"p256dh","broken")).status());
+    }
+
     // ---- transport and endpoint rules
 
     @Test
@@ -286,6 +315,39 @@ public class ArrivalPushTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void encryptsArrivalPayloadAndPreservesHttpTimeoutAndNoRedirectPolicy() throws Exception {
+        var generator=KeyPairGenerator.getInstance("EC");
+        generator.initialize(new ECGenParameterSpec("secp256r1"));
+        var vapid=generator.generateKeyPair();
+        var receiver=generator.generateKeyPair();
+        var encoder=Base64.getUrlEncoder().withoutPadding();
+        java.util.function.Function<ECPublicKey,String> point=key->{
+            byte[] bytes=new byte[65]; bytes[0]=4;
+            System.arraycopy(fixed(key.getW().getAffineX()),0,bytes,1,32);
+            System.arraycopy(fixed(key.getW().getAffineY()),0,bytes,33,32);
+            return encoder.encodeToString(bytes);
+        };
+        var transport=new VapidPushTransport(Clock.systemUTC(),point.apply((ECPublicKey)vapid.getPublic()),
+            encoder.encodeToString(fixed(((ECPrivateKey)vapid.getPrivate()).getS())),"mailto:ops@example.test");
+        AtomicReference<byte[]> body=new AtomicReference<>();
+        AtomicReference<String> encoding=new AtomicReference<>();
+        var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/push",exchange->{
+            body.set(exchange.getRequestBody().readAllBytes());
+            encoding.set(exchange.getRequestHeaders().getFirst("Content-Encoding"));
+            exchange.sendResponseHeaders(201,-1); exchange.close();
+        }); server.start();
+        try {
+            String payload="{\"kind\":\"ARRIVED\"}";
+            assertEquals(PushTransport.Result.SENT,transport.send("http://127.0.0.1:"+server.getAddress().getPort()+"/push",
+                point.apply((ECPublicKey)receiver.getPublic()),encoder.encodeToString(new byte[16]),payload));
+            assertEquals("aes128gcm",encoding.get());
+            assertTrue(body.get().length>payload.length()+16);
+            assertFalse(new String(body.get(),StandardCharsets.UTF_8).contains("ARRIVED"));
+        } finally { server.stop(0); }
     }
 
     @Test

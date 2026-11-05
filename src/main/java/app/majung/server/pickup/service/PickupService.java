@@ -266,7 +266,8 @@ public class PickupService {
         pickup.durationSeconds = request.durationSeconds();
         pickup.vehicleSourceTime = request.sourceTime();
         pickup.vehicleReceivedAt = now;
-        arrivalPush.vehicleUpdated(pickup.id, pickup.status, pickup.durationSeconds, pickup.placeVersion);
+        if (request.sourceTime().plus(vehicleFreshness).isAfter(now))
+            arrivalPush.vehicleUpdated(pickup.id, pickup.status, pickup.durationSeconds, pickup.placeVersion);
         return toVehicleResponse(pickup);
     }
 
@@ -312,6 +313,7 @@ public class PickupService {
         requirePlaceVersion(pickup, placeVersion);
         if (pickup.status != Pickup.Status.ARRIVED) pickup.arrivedAt = clock.instant();
         pickup.status = Pickup.Status.ARRIVED;
+        arrivalPush.arrived(pickup.id, pickup.placeVersion);
         pickup.clearProposal();
         return toPickupResponse(pickup, true);
     }
@@ -391,13 +393,13 @@ public class PickupService {
         return toPickupResponse(pickup, isOwner);
     }
 
-    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, String endpoint) {
+    public PickupApi.ArrivalPushState subscribeArrivalPush(UUID id, String auth, PickupApi.ArrivalPushRequest request) {
         Pickup pickup = locked(id);
         if (!tokenService.matches(tokenService.bearer(auth), pickup.participantHash)) {
             throw error(403, "FORBIDDEN", "탑승자만 도착 알림을 신청할 수 있습니다.");
         }
         requireSharing(pickup);
-        arrivalPush.subscribe(pickup.id, endpoint, pickup.placeVersion);
+        arrivalPush.subscribe(pickup.id, request, pickup.placeVersion, "/?pickup=" + pickup.id);
         return new PickupApi.ArrivalPushState(true);
     }
 
@@ -411,10 +413,10 @@ public class PickupService {
     }
 
     // Account-side variants: RideRequestService has already checked the signed-in passenger and active request.
-    public PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, String endpoint) {
+    public PickupApi.ArrivalPushState subscribeArrivalPushForAccount(UUID id, PickupApi.ArrivalPushRequest request, UUID requestId) {
         Pickup pickup = locked(id);
         requireSharing(pickup);
-        arrivalPush.subscribe(pickup.id, endpoint, pickup.placeVersion);
+        arrivalPush.subscribe(pickup.id, request, pickup.placeVersion, "/account?request=" + requestId);
         return new PickupApi.ArrivalPushState(true);
     }
 

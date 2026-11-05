@@ -21,6 +21,10 @@ public class ArrivalPush {
     public String endpoint;
     public Instant createdAt;
     public Instant notifiedAt;
+    public Instant arrivedNotifiedAt;
+    public String p256dh;
+    public String auth;
+    public String targetPath;
 
     public ArrivalPush() { }
 
