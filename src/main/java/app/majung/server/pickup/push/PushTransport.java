@@ -7,7 +7,7 @@ import app.majung.server.pickup.job.*;
 import app.majung.server.pickup.repository.*;
 import app.majung.server.pickup.security.*;
 import app.majung.server.pickup.service.*;
-/** Delivers an empty web push; the notification text lives in the browser's service worker. */
+/** Delivers Web Push; endpoint-only subscriptions retain the legacy approaching notification. */
 public interface PushTransport {
     public enum Result { SENT, GONE, FAILED }
 
@@ -17,4 +17,8 @@ public interface PushTransport {
     public String publicKey();
 
     public Result send(String endpoint);
+
+    default Result send(String endpoint, String p256dh, String auth, String payload) {
+        return send(endpoint);
+    }
 }

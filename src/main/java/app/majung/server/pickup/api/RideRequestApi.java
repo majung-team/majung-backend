@@ -123,7 +123,7 @@ public class RideRequestApi {
     PickupApi.ArrivalPushState subscribeArrivalPush(@Parameter(hidden = true) Authentication auth,
                                                     @Parameter(description = "마중 요청 식별자 (UUID)") @PathVariable UUID id,
                                                     @Valid @RequestBody PickupApi.ArrivalPushRequest body) {
-        return service.subscribeArrivalPush(AccountIdentity.requireMember(auth), id, body.endpoint());
+        return service.subscribeArrivalPush(AccountIdentity.requireMember(auth), id, body);
     }
 
     @Operation(summary = "마중 요청 도착 알림 푸시 해제", description = "등록된 마중 도착 알림 푸시를 해제합니다.")

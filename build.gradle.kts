@@ -11,6 +11,10 @@ java {
 }
 
 dependencies {
+    implementation("nl.martijndwars:web-push:5.1.2")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.83")
+    implementation("org.apache.httpcomponents:httpclient:4.5.14")
+    implementation("org.bitbucket.b_c:jose4j:0.9.6")
     implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.8"))
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-actuator")

@@ -19,6 +19,10 @@ public interface ArrivalPushRepository extends JpaRepository<ArrivalPush, UUID> 
     @Query("update ArrivalPush a set a.notifiedAt = :now where a.pickupId = :pickupId and a.notifiedAt is null and a.placeVersion = :placeVersion")
     int claim(UUID pickupId, Instant now, long placeVersion);
 
+    @Modifying
+    @Query("update ArrivalPush a set a.arrivedNotifiedAt = :now where a.pickupId = :pickupId and a.arrivedNotifiedAt is null and a.placeVersion = :placeVersion and a.p256dh is not null")
+    int claimArrived(UUID pickupId, Instant now, long placeVersion);
+
     boolean existsByPickupIdAndPlaceVersionAndEndpointAndNotifiedAtIsNotNull(UUID pickupId, long placeVersion, String endpoint);
 
     @Modifying
