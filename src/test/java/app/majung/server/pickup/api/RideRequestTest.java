@@ -92,6 +92,44 @@ public class RideRequestTest {
         service.cancel(a.id,request.requestId());
         assertEquals(409,assertThrows(ApiException.class,()->service.accept(driver.auth,request.requestId())).status);
     }
+    @Test void cancelledRequestsCanBeReplacedButDelayedSubmissionCannotReviveThem() {
+        for (boolean queued : List.of(false, true)) {
+            Driver driver = driver();
+            Member passenger = member();
+            var originalInput = input(driver);
+            var original = service.submit(passenger.id, originalInput);
+            if (queued) service.accept(driver.auth, original.requestId());
+
+            assertEquals("CANCELLED", service.cancel(passenger.id, original.requestId()).status());
+            assertEquals("CANCELLED", service.cancel(passenger.id, original.requestId()).status());
+            var replacement = service.submit(passenger.id, input(driver));
+            assertNotEquals(original.requestId(), replacement.requestId());
+            assertEquals("PENDING", replacement.status());
+
+            assertEquals("CANCELLED", service.submit(passenger.id, originalInput).status());
+            assertEquals(409, assertThrows(ApiException.class,
+                    () -> service.accept(driver.auth, original.requestId())).status);
+            var waiting = service.received(driver.auth);
+            assertEquals(1, waiting.size());
+            assertEquals(replacement.requestId(), waiting.get(0).requestId());
+        }
+    }
+    @Test void expiredRequestCanBeReplacedWithoutReusingItsPlaceOrQueueEntry() {
+        Driver driver = driver();
+        Member passenger = member();
+        var oldInput = input(driver);
+        var expired = service.submit(passenger.id, oldInput);
+        clock.advance(Duration.ofMinutes(31));
+        assertEquals("EXPIRED", service.submit(passenger.id, oldInput).status());
+        assertEquals(409, assertThrows(ApiException.class,
+                () -> service.accept(driver.auth, expired.requestId())).status);
+        var newInput = new RideRequestApi.Submit(driver.member.id,
+                new PickupApi.Place("다른 정문", 37.2, 127.2), UUID.randomUUID());
+        var replacement = service.submit(passenger.id, newInput);
+        assertEquals("PENDING", replacement.status());
+        assertEquals("다른 정문", replacement.place().label());
+        assertEquals(1, service.received(driver.auth).size());
+    }
     @Test void requestsExpireAndOtherVehicleCannotAccept() {
         Driver driver=driver(); Driver other=driver(); Member a=member(); var request=service.submit(a.id,input(driver));
         assertEquals(404,assertThrows(ApiException.class,()->service.accept(other.auth,request.requestId())).status);
