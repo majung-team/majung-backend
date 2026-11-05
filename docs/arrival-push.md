@@ -41,7 +41,7 @@ RFC 8291 `aes128gcm` 암호화를 사용한다. VAPID 개인 키는 서버 환�
 
 ## 서버 설정과 DB 반영
 
-기존 `MAJUNG_PUSH_VAPID_PUBLIC_KEY`, `MAJUNG_PUSH_VAPID_PRIVATE_KEY`, `MAJUNG_PUSH_SUBJECT` 설정을 사용한다. 공개·개인 키 또는 subject가 일부만 설정되면 기동에 실패한다. 키가 전혀 없으면 기능을 끈다.
+기존 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` 설정을 사용한다. 공개·개인 키 또는 subject가 일부만 설정되면 기동에 실패한다. 키가 전혀 없으면 기능을 끈다.
 
 운영 DB는 백업 후 `src/main/resources/db/add-arrival-context.sql`을 먼저 적용한다. 네 컬럼을 추가하는 반복 가능한 변경이며 이전 서버도 계속 사용할 수 있다. JPA validate 전에 반영해야 한다. 새 DB에는 `initial-schema.sql`을 사용한다. 기존 DB에 initial-schema.sql 전체를 재실행하지 않는다.
 
