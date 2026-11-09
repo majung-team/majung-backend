@@ -82,6 +82,20 @@ class BlueGreenTest(unittest.TestCase):
             with self.assertRaises(ValueError): release.publish_blue_green(NEW,jar(OLD))
             command.assert_not_called()
 
+    def test_candidate_healthy_after_thirty_attempts_can_become_active(self):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = json.dumps({'revision': NEW, 'slot': 'green'}).encode()
+        probe = release.probe
+        with patch.object(release.urllib.request, 'urlopen', side_effect=[
+                *[ConnectionRefusedError()] * 32, response, response]) as urlopen:
+            failure,state,route,active,actions,probes = self.run_case(probe)
+        self.assertIsNone(failure)
+        self.assertEqual(NEW, state['revision'])
+        self.assertEqual(34, urlopen.call_count)
+        self.assertNotIn('attempts', probes[1].kwargs)
+
     def test_same_revision_on_previous_slot_does_not_pass_candidate_probe(self):
         response = unittest.mock.MagicMock()
         response.__enter__.return_value = response

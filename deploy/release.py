@@ -27,6 +27,7 @@ ACTIVE_SLOT = pathlib.Path('/etc/majung/active-slot')
 UPSTREAM = pathlib.Path('/etc/caddy/majung-upstream.caddy')
 SLOT_PORTS = {'blue': 8081, 'green': 8082}
 DRAIN_SECONDS = 20
+CANDIDATE_START_ATTEMPTS = 75
 
 WEB_FILES = {'privacy.html', 'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js', 'push.js', 'proposal.js', 'stream.js', 'sw.js', 'manifest.webmanifest',
              'account.html', 'account.css', 'account.js', 'account-api.js',
@@ -160,7 +161,8 @@ def publish_blue_green(revision, data):
         finally:
             staged.unlink(missing_ok=True)
         run('systemctl', 'start', f'majung@{candidate}.service')
-        if not probe(f'http://127.0.0.1:{SLOT_PORTS[candidate]}/api/v1/health', revision, expected_slot=candidate):
+        if not probe(f'http://127.0.0.1:{SLOT_PORTS[candidate]}/api/v1/health', revision,
+                     attempts=CANDIDATE_START_ATTEMPTS, expected_slot=candidate):
             raise RuntimeError('Candidate did not become healthy')
         run('systemctl', 'enable', f'majung@{candidate}.service')
         atomic_text(UPSTREAM, upstream_config(candidate))
