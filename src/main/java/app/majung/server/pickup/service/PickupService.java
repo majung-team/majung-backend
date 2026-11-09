@@ -74,6 +74,19 @@ public class PickupService {
         return new PickupApi.Created(pickup.id, ownerToken, inviteToken, pickup.inviteExpiresAt, pickup.expiresAt);
     }
 
+    @Transactional(readOnly = true)
+    public PickupApi.InvitationPreview previewInvitation(UUID id, String inviteToken) {
+        Instant now = clock.instant();
+        Pickup pickup = pickupRepository.findById(id)
+                .filter(candidate -> candidate.status == Pickup.Status.INVITING
+                        && !candidate.isExpired(now)
+                        && now.isBefore(candidate.inviteExpiresAt)
+                        && candidate.inviteHash != null
+                        && tokenService.matches(inviteToken, candidate.inviteHash))
+                .orElseThrow(() -> error(410, "INVITE_UNAVAILABLE", "이 초대 링크는 더 이상 사용할 수 없어요."));
+        return new PickupApi.InvitationPreview(pickup.placeLabel);
+    }
+
     public PickupApi.Joined joinPickup(UUID id, PickupApi.JoinRequest request) {
         Pickup pickup = locked(id);
         requireOpen(pickup);

@@ -17,7 +17,9 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,6 +52,10 @@ public class PickupApi {
     public record JoinRequest(
             @Schema(description = "43자리 URL-safe Base64 초대 토큰", example = "E3aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_abc") @NotBlank @Size(min = 43, max = 43) String inviteToken,
             @Schema(description = "탑승자 표시 닉네임 (최대 12자)", example = "승객1") @Size(max = 12) String displayName) { }
+
+    public record InvitationCheck(@NotBlank @Size(min = 43, max = 43) String inviteToken) { }
+
+    public record InvitationPreview(String placeLabel) { }
 
     public record ReadinessRequest(
             @Schema(description = "탑승 준비 상태 (NOT_READY, READY, COMPLETED)", example = "READY") @NotNull Pickup.Readiness readiness,
@@ -175,6 +181,13 @@ public class PickupApi {
     Created create(@Valid @RequestBody CreateRequest request,
                    @Parameter(description = "차량/운전자 인증 토큰 (옵션)") @RequestHeader(value = "Authorization", required = false) String authorization) {
         return pickupService.createPickup(request.place(), authorization);
+    }
+
+    @Operation(summary = "참여 전 초대 확인", description = "초대를 사용하지 않고 유효한 링크의 장소 이름만 반환합니다.")
+    @PostMapping(value = "/{id}/invitation-preview", consumes = "application/json")
+    ResponseEntity<InvitationPreview> previewInvitation(@PathVariable UUID id, @Valid @RequestBody InvitationCheck request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(pickupService.previewInvitation(id, request.inviteToken()));
     }
 
     @Operation(summary = "초대 링크로 픽업 참여", description = "승객이 초대 토큰을 사용하여 픽업 세션에 참여하고 승객 전용 인증 토큰을 발급받습니다.")
