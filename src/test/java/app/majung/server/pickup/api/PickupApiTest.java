@@ -152,6 +152,29 @@ public class PickupApiTest {
     }
 
     @Test
+    void invitationPreviewDoesNotConsumeTheTokenOrExposeOtherPickupData() throws Exception {
+        Session session = create();
+        String path = session.path() + "/invitation-preview";
+        var preview = call("POST", path, null, Map.of("inviteToken", session.invite()));
+        assertEquals(200, preview.status());
+        assertFalse(preview.body().path("placeLabel").asText().isBlank());
+        assertEquals(1, preview.body().size());
+        assertError(call("POST", path, null, Map.of("inviteToken", create().invite())), 410, "INVITE_UNAVAILABLE");
+        assertEquals(201, joinRequest(session, session.invite()).status());
+        assertError(call("POST", path, null, Map.of("inviteToken", session.invite())), 410, "INVITE_UNAVAILABLE");
+
+        Session rotated = create();
+        assertEquals(200, call("POST", rotated.path() + "/invitations", rotated.owner(), null).status());
+        assertError(call("POST", rotated.path() + "/invitation-preview", null,
+                Map.of("inviteToken", rotated.invite())), 410, "INVITE_UNAVAILABLE");
+
+        Session expired = create();
+        clock.advance(Duration.ofMinutes(30));
+        assertError(call("POST", expired.path() + "/invitation-preview", null,
+                Map.of("inviteToken", expired.invite())), 410, "INVITE_UNAVAILABLE");
+    }
+
+    @Test
     void invitationIsSingleUseAndHashesAreNotReturnedOrStoredAsRawTokens() throws Exception {
         Session session = create();
         Guest guest = join(session);
