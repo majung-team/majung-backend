@@ -2,12 +2,23 @@
 
 기능: 2.1 자동 연결, 2.2 탑승자 끊기. 차량 QR로 시작하는 초대에 적용한다. 마중 요청·직접 초대로 시작한 픽업은 요청 목록에서 관리하며 이 API로 끊을 수 없다.
 
+## 참여 전 초대 확인
+
+`POST /api/v1/pickups/{id}/invitation-preview`에 `{"inviteToken":"<초대 토큰>"}`을 보낸다.
+
+| 응답 | 조건 |
+| --- | --- |
+| 200 `{"placeLabel":"<만날 장소 이름>"}` | 유효한 초대. 응답에 `Cache-Control: no-store` 적용 |
+| 410 `INVITE_UNAVAILABLE` | 잘못되었거나 이미 사용·재발급·만료된 초대 또는 존재하지 않는 픽업 |
+
+확인 요청은 초대를 소진하지 않는다. 응답에는 만날 장소 이름만 포함한다.
+
 ## 자동 연결
 
 `POST /api/v1/pickups/{id}/participants`
 
 - `displayName`은 선택이다. 없거나 공백이면 `탑승자`로 저장한다. 12자를 넘으면 400이다.
-- 초대 링크를 연 첫 사람이 바로 `ACTIVE`로 연결된다. 초대는 이 순간 소멸한다. 두 번째 요청은 410 `INVITE_UNAVAILABLE`이다.
+- 유효한 초대로 참여 요청에 성공한 첫 탑승자가 바로 `ACTIVE`로 연결된다. 초대는 이 순간 소멸한다. 두 번째 요청은 410 `INVITE_UNAVAILABLE`이다.
 - `WAITING_APPROVAL` 상태로 바뀌는 경로는 없다. 이전에 만들어져 이 상태로 남은 픽업과 이전 앱을 위해 값과 승인 API(`POST .../approval`)는 남겨 두었다. 이미 `ACTIVE`·`ARRIVED`인 픽업에 승인을 보내면 200으로 그대로 응답한다.
 
 ## 탑승자 끊기
