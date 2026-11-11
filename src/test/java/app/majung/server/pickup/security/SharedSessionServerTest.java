@@ -15,6 +15,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +88,49 @@ public class SharedSessionServerTest {
                     .header("Cookie", cookie).GET().build(), HttpResponse.BodyHandlers.ofString());
             assertFalse(json.readTree(after.body()).path("authenticated").asBoolean());
             assertNull(firstRepository.findById(session.getId()));
+
+            // Native iOS exchange on blue yields shared JSESSIONID usable on green with CSRF
+            String verifier = "shared_ios_verifier_0123456789_abcdefghijkl";
+            String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+            Session handoff = firstRepository.createSession();
+            handoff.setMaxInactiveInterval(Duration.ofSeconds(120));
+            handoff.setAttribute("majung.native.ios.handoffMemberId", member.id.toString());
+            handoff.setAttribute("majung.native.ios.handoffChallenge", challenge);
+            handoff.setAttribute("majung.native.ios.handoffExpiresAt", System.currentTimeMillis() + 120_000L);
+            firstRepository.save(handoff);
+
+            var unavailable = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+                    .send(HttpRequest.newBuilder(uri(blue, "/api/v1/auth/ios/login?challenge=" + challenge)).GET().build(),
+                            HttpResponse.BodyHandlers.discarding());
+            assertEquals(302, unavailable.statusCode());
+            assertEquals("majung://auth/callback?status=unavailable", unavailable.headers().firstValue("Location").orElseThrow());
+
+            var exchanged = client.send(HttpRequest.newBuilder(uri(blue, "/api/v1/auth/ios/exchange"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"" + handoff.getId() + "\",\"verifier\":\"" + verifier + "\"}"))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, exchanged.statusCode());
+            String iosCookie = exchanged.headers().allValues("Set-Cookie").stream()
+                    .filter(header -> header.startsWith("JSESSIONID="))
+                    .map(header -> header.split(";", 2)[0])
+                    .findFirst().orElseThrow();
+
+            var greenSessionResp = client.send(HttpRequest.newBuilder(uri(green, "/api/v1/auth/session"))
+                    .header("Cookie", iosCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, greenSessionResp.statusCode());
+            var greenData = json.readTree(greenSessionResp.body());
+            assertTrue(greenData.path("authenticated").asBoolean());
+            assertEquals(member.id.toString(), greenData.path("member").path("memberId").asText());
+            String greenCsrf = greenData.path("csrfToken").asText();
+            var nicknameResp = client.send(HttpRequest.newBuilder(uri(green, "/api/v1/accounts/me"))
+                    .header("Cookie", iosCookie).header("X-CSRF-TOKEN", greenCsrf)
+                    .header("Content-Type", "application/json")
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"nickname\":\"공유세션승객\"}"))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, nicknameResp.statusCode());
+            assertEquals("공유세션승객", json.readTree(nicknameResp.body()).path("nickname").asText());
+
             RestoreVerification.verify(blue, uri(blue, "").toString());
         }
     }

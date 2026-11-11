@@ -59,12 +59,15 @@ public class AccountSecurity {
 
     @Bean
     @Order(1)
-    public SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members, MeterRegistry metrics,
+    public SecurityFilterChain accountSecurityChain(HttpSecurity http, MemberService members,
+            NativeAuthHandoffService nativeAuth, MeterRegistry metrics,
             ObjectProvider<OAuth2AuthorizedClientService> authorizedClients,
             @Value("${majung.login.enabled:false}") boolean enabled) throws Exception {
         http.securityMatcher("/api/v1/auth/**", "/api/v1/accounts/**", "/api/v1/connections/**", "/api/v1/vehicle-links/**", "/api/v1/ride-requests/**")
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/auth/kakao/unlink", "/api/v1/auth/session", "/api/v1/auth/login", "/api/v1/auth/authorize/**", "/api/v1/auth/callback/**").permitAll()
+                        .requestMatchers("/api/v1/auth/kakao/unlink", "/api/v1/auth/session", "/api/v1/auth/login",
+                                "/api/v1/auth/ios/login", "/api/v1/auth/ios/exchange",
+                                "/api/v1/auth/authorize/**", "/api/v1/auth/callback/**").permitAll()
                         .anyRequest().authenticated())
                 .requestCache(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
@@ -113,16 +116,18 @@ public class AccountSecurity {
                         OAuth2AuthorizedClientService clients = authorizedClients.getIfAvailable();
                         if (clients != null) clients.removeAuthorizedClient("kakao", authentication.getName());
                         metrics.counter("majung.login.results", "result", "success").increment();
+                        String nativeCallback = nativeAuth.issueHandoffOrNull(request, authentication);
                         response.setStatus(302);
-                        response.setHeader("Location", "/account");
+                        response.setHeader("Location", nativeCallback != null ? nativeCallback : "/account");
                     })
                     .failureHandler((request, response, exception) -> {
                         metrics.counter("majung.login.results", "result", "failure").increment();
+                        String nativeCallback = nativeAuth.consumeFailureCallback(request);
                         response.setStatus(302);
-                        response.setHeader("Location", "/account?login=failed");
+                        response.setHeader("Location", nativeCallback != null ? nativeCallback : "/account?login=failed");
                     }));
         }
-        http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/auth/kakao/unlink"));
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/auth/kakao/unlink", "/api/v1/auth/ios/exchange"));
         // Only the provider webhook uses its server-side credential instead of browser CSRF.
         return http.build();
     }

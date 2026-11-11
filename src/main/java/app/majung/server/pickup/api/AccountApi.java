@@ -7,15 +7,26 @@ import app.majung.server.pickup.push.*;
 import app.majung.server.pickup.repository.*;
 import app.majung.server.pickup.security.*;
 import app.majung.server.pickup.service.*;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,11 +75,21 @@ public class AccountApi {
             @Schema(description = "CSRF 토큰", example = "a8f3b2c1-d4e5-4678-90ab-cdef12345678") String csrfToken
     ) { }
 
+    public record NativeExchange(
+            @Schema(description = "일회용 로그인 코드 (UUID)", example = "f47ac10b-58cc-4372-a567-0e02b2c3d479") @NotBlank @Pattern(regexp = "[0-9a-fA-F-]{36}") String code,
+            @Schema(description = "클라이언트가 생성한 PKCE 검증 키 (43자)") @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{43}") String verifier
+    ) { }
+
     private final MemberService memberService;
+    private final NativeAuthHandoffService nativeAuth;
+    private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
     private final boolean enabled;
 
-    public AccountApi(MemberService memberService, @Value("${majung.login.enabled:false}") boolean enabled) {
+    public AccountApi(MemberService memberService,
+                      NativeAuthHandoffService nativeAuth,
+                      @Value("${majung.login.enabled:false}") boolean enabled) {
         this.memberService = memberService;
+        this.nativeAuth = nativeAuth;
         this.enabled = enabled;
     }
 
@@ -92,6 +113,48 @@ public class AccountApi {
         if (!enabled) throw new ApiException(503, "LOGIN_NOT_CONFIGURED", "로그인 준비 중이에요.");
         response.setStatus(302);
         response.setHeader("Location", "/api/v1/auth/authorize/kakao");
+    }
+
+    @Operation(summary = "iOS 앱 카카오 로그인 시작", description = "PKCE challenge를 세션에 기록한 뒤 카카오 OAuth2 로그인을 시작하고 완료 시 앱 콜백으로 이동합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "302", description = "카카오 인가 요청 또는 앱 불가 콜백으로 리다이렉트"),
+            @ApiResponse(responseCode = "400", description = "유효하지 않은 PKCE challenge 형식")
+    })
+    @GetMapping("/api/v1/auth/ios/login")
+    void iosLogin(@Parameter(description = "SHA-256 URL-safe Base64 PKCE challenge (43자)") @RequestParam String challenge,
+                  HttpServletRequest request, HttpServletResponse response) throws IOException {
+        nativeAuth.validateChallenge(challenge);
+        if (!enabled) {
+            response.setStatus(302);
+            response.setHeader("Location", NativeAuthHandoffService.NATIVE_CALLBACK_PREFIX + "?status=unavailable");
+            return;
+        }
+        nativeAuth.rememberStart(request, challenge);
+        response.setStatus(302);
+        response.setHeader("Location", "/api/v1/auth/authorize/kakao");
+    }
+
+    @Operation(summary = "iOS 로그인 코드 세션 교환", description = "앱 콜백으로 받은 일회용 코드와 PKCE 검증 키를 확인해 회원 세션을 발급합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "세션 발급 및 회원 프로필 조회 성공"),
+            @ApiResponse(responseCode = "400", description = "유효하지 않은 요청 형식"),
+            @ApiResponse(responseCode = "401", description = "만료되었거나 유효하지 않은 코드·검증 키")
+    })
+    @PostMapping("/api/v1/auth/ios/exchange")
+    Profile iosExchange(@Valid @RequestBody NativeExchange body,
+                        HttpServletRequest request, HttpServletResponse response) {
+        Member member = nativeAuth.exchange(body.code(), body.verifier());
+        HttpSession previous = request.getSession(false);
+        if (previous != null) previous.invalidate();
+        request.getSession(true);
+        var authorities = List.of(new SimpleGrantedAuthority("ROLE_MEMBER"));
+        var principal = new DefaultOAuth2User(authorities, Map.of("memberId", member.id.toString()), "memberId");
+        var authentication = UsernamePasswordAuthenticationToken.authenticated(principal, null, authorities);
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
+        securityContextRepository.saveContext(context, request, response);
+        return MemberService.profile(member);
     }
 
     @Operation(summary = "내 프로필 조회", description = "현재 로그인한 사용자의 프로필 정보(회원 식별자, 마중 아이디, 닉네임 등)를 조회합니다.")
