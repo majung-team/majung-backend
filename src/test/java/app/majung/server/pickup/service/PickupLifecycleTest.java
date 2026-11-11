@@ -120,4 +120,22 @@ public class PickupLifecycleTest {
         assertEquals("COMPLETED",service.getPickup(completed.id,completed.owner).status());
         assertEquals(105,pickups.findAll().stream().filter(p->p.status==Pickup.Status.EXPIRED).count());
     }
+    @Test void waitingGuestCanLeaveAndReopenInviteWhileActiveCannot() {
+        Session activeSession = active();
+        ApiException activeBlocked = assertThrows(ApiException.class,
+                () -> service.leaveWaiting(activeSession.id, activeSession.guest));
+        assertEquals(409, activeBlocked.status);
+
+        var created = service.createPickup(new PickupApi.Place("시험 장소", 37.0, 127.0), null);
+        var guest = service.joinPickup(created.pickupId(), new PickupApi.JoinRequest(created.inviteToken(), "대기자"));
+        Pickup stored = pickups.findById(created.pickupId()).orElseThrow();
+        stored.status = Pickup.Status.WAITING_APPROVAL;
+        pickups.saveAndFlush(stored);
+
+        service.leaveWaiting(created.pickupId(), "Bearer " + guest.participantToken());
+        assertEquals("INVITING", service.getPickup(created.pickupId(), "Bearer " + created.driverToken()).status());
+        ApiException staleToken = assertThrows(ApiException.class,
+                () -> service.getPickup(created.pickupId(), "Bearer " + guest.participantToken()));
+        assertEquals(403, staleToken.status);
+    }
 }

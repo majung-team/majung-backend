@@ -67,20 +67,46 @@ public class PickupEventsApi {
                        @Parameter(hidden = true) Authentication authentication,
                        @Parameter(hidden = true) HttpServletRequest request,
                        @Parameter(hidden = true) HttpServletResponse response) {
-        UUID member = AccountIdentity.requireMember(authentication);
+        UUID member = requireSessionMember(authentication, request);
         HttpSession session = request.getSession(false);
         headers(response);
         return streams.open(id, () -> {
-            try {
-                Object stored = session == null ? null : session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
-                if (!(stored instanceof SecurityContext context)
-                        || !member.equals(AccountIdentity.memberOrNull(context.getAuthentication())))
-                    throw new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요.");
-            } catch (IllegalStateException ended) {
-                throw new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요.");
-            }
+            verifyActiveSession(session, member);
             RideRequestApi.Tracking current = rides.tracking(member, id);
             return new PickupEventStreams.State(current.pickup(), current.vehicle());
         });
+    }
+
+    @Operation(summary = "내 요청·초대 목록 실시간 SSE 스트림 (회원 전용)", description = "받은 마중 초대, 수락/거절 결과, 대기열 변경 이벤트를 실시간으로 수신합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SSE 스트림 연결 성공 (text/event-stream)"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자 (로그인 필요)")
+    })
+    @GetMapping(value = "/api/v1/ride-requests/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter accountRequests(@Parameter(hidden = true) Authentication authentication,
+                                      @Parameter(hidden = true) HttpServletRequest request,
+                                      @Parameter(hidden = true) HttpServletResponse response) {
+        UUID member = requireSessionMember(authentication, request);
+        HttpSession session = request.getSession(false);
+        headers(response);
+        return streams.openRevision(member, () -> {
+            verifyActiveSession(session, member);
+            return rides.passengerRevision(member);
+        });
+    }
+
+    private static UUID requireSessionMember(Authentication authentication, HttpServletRequest request) {
+        return AccountIdentity.requireMember(authentication);
+    }
+
+    private static void verifyActiveSession(HttpSession session, UUID member) {
+        try {
+            Object stored = session == null ? null : session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+            if (!(stored instanceof SecurityContext context)
+                    || !member.equals(AccountIdentity.memberOrNull(context.getAuthentication())))
+                throw new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요.");
+        } catch (IllegalStateException ended) {
+            throw new ApiException(401, "LOGIN_REQUIRED", "다시 로그인해주세요.");
+        }
     }
 }

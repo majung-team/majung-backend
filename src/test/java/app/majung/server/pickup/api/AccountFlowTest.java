@@ -429,5 +429,30 @@ public class AccountFlowTest {
                         .contentType("application/json")
                         .content("{\"code\":\"" + unlinkedHandoff.getId() + "\",\"verifier\":\"" + verifier + "\"}"))
                 .andExpect(status().isUnauthorized());
+
+        // Self account deletion requires CSRF and removes member + invalidates session
+        subject.incrementAndGet();
+        MvcResult delStart = mvc.perform(get("/api/v1/auth/ios/login").param("challenge", challenge)).andReturn();
+        MockHttpSession delBrowser = (MockHttpSession) delStart.getRequest().getSession(false);
+        String delState = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(
+                mvc.perform(get("/api/v1/auth/authorize/kakao").session(delBrowser)).andReturn()
+                        .getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+        String delCode = UriComponentsBuilder.fromUriString(
+                mvc.perform(get("/api/v1/auth/callback/kakao").session(delBrowser)
+                                .param("state", delState).param("code", "fixture-code"))
+                        .andReturn().getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("code");
+        MockHttpSession deleteSession = (MockHttpSession) mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + delCode + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getRequest().getSession(false);
+        String deleteCsrf = tree(mvc.perform(get("/api/v1/auth/session").session(deleteSession))
+                .andExpect(status().isOk()).andReturn()).path("csrfToken").asText();
+        mvc.perform(delete("/api/v1/accounts/me").session(deleteSession))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/accounts/me").session(deleteSession).header("X-CSRF-TOKEN", deleteCsrf))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/accounts/me").session(deleteSession))
+                .andExpect(status().isUnauthorized());
     }
 }

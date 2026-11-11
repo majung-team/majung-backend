@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
 
 /** Web Push with VAPID and RFC 8291 encrypted event context; bounded HTTP transport. */
 @Component
-public class VapidPushTransport implements PushTransport {
+public class VapidPushTransport {
     private static final Logger log = LoggerFactory.getLogger(VapidPushTransport.class);
     private static final Base64.Encoder URL = Base64.getUrlEncoder().withoutPadding();
     private static final Duration TOKEN_LIFETIME = Duration.ofHours(12);
@@ -80,15 +80,12 @@ public class VapidPushTransport implements PushTransport {
         } catch (GeneralSecurityException e) { throw new IllegalArgumentException("Invalid web push configuration"); }
     }
 
-    @Override
     public boolean enabled() { return privateKey != null; }
 
-    @Override
     public String publicKey() { return publicKey; }
 
-    @Override
-    public Result send(String endpoint) {
-        if (!enabled()) return Result.FAILED;
+    public PushTransport.Result send(String endpoint) {
+        if (!enabled()) return PushTransport.Result.FAILED;
         try {
             URI uri = URI.create(endpoint);
             String audience = uri.getScheme() + "://" + uri.getAuthority();
@@ -97,22 +94,21 @@ public class VapidPushTransport implements PushTransport {
                     .header("TTL", "600").header("Urgency", "high")
                     .POST(HttpRequest.BodyPublishers.noBody()).build();
             int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-            if (status >= 200 && status < 300) return Result.SENT;
+            if (status >= 200 && status < 300) return PushTransport.Result.SENT;
             // The endpoint is a capability URL, so only the status is logged.
             log.warn("Arrival push rejected: status={}", status);
-            return status == 404 || status == 410 ? Result.GONE : Result.FAILED;
+            return status == 404 || status == 410 ? PushTransport.Result.GONE : PushTransport.Result.FAILED;
         } catch (IOException | GeneralSecurityException | IllegalArgumentException e) {
             log.warn("Arrival push failed: {}", e.getClass().getSimpleName());
-            return Result.FAILED;
+            return PushTransport.Result.FAILED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return Result.FAILED;
+            return PushTransport.Result.FAILED;
         }
     }
 
-    @Override
-    public Result send(String endpoint, String p256dh, String auth, String payload) {
-        if (!enabled()) return Result.FAILED;
+    public PushTransport.Result send(String endpoint, String p256dh, String auth, String payload) {
+        if (!enabled()) return PushTransport.Result.FAILED;
         if (p256dh == null || auth == null) return send(endpoint);
         try {
             // Use the library's RFC 8291 encryption, retaining our bounded HTTP client and no redirects.
@@ -125,12 +121,13 @@ public class VapidPushTransport implements PushTransport {
             var response = client.send(request.POST(HttpRequest.BodyPublishers.ofByteArray(
                     prepared.getEntity().getContent().readAllBytes())).build(), HttpResponse.BodyHandlers.discarding());
             int status = response.statusCode();
-            return status >= 200 && status < 300 ? Result.SENT : status == 404 || status == 410 ? Result.GONE : Result.FAILED;
+            return status >= 200 && status < 300 ? PushTransport.Result.SENT
+                    : status == 404 || status == 410 ? PushTransport.Result.GONE : PushTransport.Result.FAILED;
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); return Result.FAILED;
+            Thread.currentThread().interrupt(); return PushTransport.Result.FAILED;
         } catch (Exception e) {
             log.warn("Encrypted arrival push failed: {}", e.getClass().getSimpleName());
-            return Result.FAILED;
+            return PushTransport.Result.FAILED;
         }
     }
 

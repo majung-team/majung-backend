@@ -43,7 +43,9 @@ public class ClientConfigurationApi {
     })
     @GetMapping(value = "/api/v1/config", produces = "application/json")
     Configuration configuration() {
-        return new Configuration(deploymentPolicy.developmentToolsEnabled(), kakaoMapJavaScriptKey,
-                arrivalPush.enabled() ? arrivalPush.publicKey() : null);
+        return new Configuration(
+                deploymentPolicy.developmentToolsEnabled(),
+                kakaoMapJavaScriptKey,
+                arrivalPush.webPushEnabled() ? arrivalPush.publicKey() : null);
     }
 }

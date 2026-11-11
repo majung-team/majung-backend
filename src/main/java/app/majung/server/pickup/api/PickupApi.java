@@ -246,6 +246,19 @@ public class PickupApi {
         return pickupService.disconnectParticipant(id, auth);
     }
 
+    @Operation(summary = "초대 승인 대기 나가기 (게스트 전용)", description = "승인 대기(WAITING_APPROVAL) 중인 비로그인 승객이 참여를 취소하고 초대를 다시 열어둡니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "대기 취소 완료"),
+            @ApiResponse(responseCode = "403", description = "탑승자 인증 실패"),
+            @ApiResponse(responseCode = "409", description = "이미 픽업이 시작되었거나 나갈 수 없는 상태")
+    })
+    @PostMapping("/{id}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void leaveWaiting(@Parameter(description = "픽업 식별자 (UUID)") @PathVariable UUID id,
+                      @Parameter(description = "탑승자 인증 헤더") @RequestHeader(value = "Authorization", required = false) String auth) {
+        pickupService.leaveWaiting(id, auth);
+    }
+
     @Operation(summary = "승객 탑승 승인", description = "대기열에서 특정 승객의 탑승을 운전자가 승인합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "탑승 승인 성공")

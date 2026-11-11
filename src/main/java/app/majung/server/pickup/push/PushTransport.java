@@ -13,6 +13,10 @@ public interface PushTransport {
 
     public boolean enabled();
 
+    default boolean webPushEnabled() { return enabled(); }
+
+    default boolean apnsEnabled() { return false; }
+
     /** URL-safe Base64 uncompressed P-256 point the browser needs for subscribe(); null when disabled. */
     public String publicKey();
 

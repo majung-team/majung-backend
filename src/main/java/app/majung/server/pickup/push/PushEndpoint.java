@@ -26,10 +26,20 @@ public final class PushEndpoint {
     private PushEndpoint() { }
 
     public static String validate(String endpoint) {
+        return validate(endpoint, false);
+    }
+
+    public static String validate(String endpoint, boolean apnsEnabled) {
         if (endpoint == null || endpoint.isBlank() || endpoint.length() > MAX_LENGTH) throw invalid();
+        String stripped = endpoint.strip();
+        if (apnsEnabled && stripped.regionMatches(true, 0, "apns://", 0, 7)) {
+            String token = stripped.substring(7);
+            if (!token.matches("[0-9a-fA-F]{64,256}")) throw invalid();
+            return "apns://" + token.toLowerCase(Locale.ROOT);
+        }
         URI uri;
         try {
-            uri = new URI(endpoint.strip());
+            uri = new URI(stripped);
         } catch (URISyntaxException e) {
             throw invalid();
         }

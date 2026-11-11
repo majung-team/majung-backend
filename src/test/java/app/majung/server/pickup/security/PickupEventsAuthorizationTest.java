@@ -55,5 +55,21 @@ public class PickupEventsAuthorizationTest {
         session.invalidate();
         assertEquals(401, assertThrows(ApiException.class, () -> captured.get().get()).status);
         verify(rides, times(1)).tracking(member, requestId);
+
+        var reqCaptured = new AtomicReference<Supplier<Object>>();
+        when(streams.openRevision(eq(member), any())).thenAnswer(call -> {
+            reqCaptured.set(call.getArgument(1));
+            return new SseEmitter();
+        });
+        when(rides.passengerRevision(member)).thenReturn(List.of("rev-1"));
+        var reqSession = new MockHttpSession();
+        reqSession.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        var listRequest = new MockHttpServletRequest();
+        listRequest.setSession(reqSession);
+        new PickupEventsApi(mock(PickupService.class), rides, streams).accountRequests(
+                authentication, listRequest, new MockHttpServletResponse());
+        assertEquals(List.of("rev-1"), reqCaptured.get().get());
+        reqSession.invalidate();
+        assertEquals(401, assertThrows(ApiException.class, () -> reqCaptured.get().get()).status);
     }
 }

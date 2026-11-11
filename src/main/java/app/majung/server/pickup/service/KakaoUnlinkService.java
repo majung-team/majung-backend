@@ -24,34 +24,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class KakaoUnlinkService {
     private static final Logger log = LoggerFactory.getLogger(KakaoUnlinkService.class);
     private final KakaoUnlinkRepository unlinkRepository;
-    private final MemberRepository memberRepository;
-    private final MemberConnectionRepository connectionRepository;
-    private final RideRequestRepository rideRequests;
-    private final PickupRepository pickups;
-    private final ArrivalPushService arrivalPush;
-    private final VehicleAccountLinkRepository vehicleLinks;
-    private final VehicleAccountChallengeRepository vehicleChallenges;
+    private final MemberDeletionService deletionService;
     private final TransactionTemplate transaction;
     private final Clock clock;
     private final String adminKey;
     private final String appId;
     private final boolean cleanupEnabled;
 
-    public KakaoUnlinkService(KakaoUnlinkRepository unlinkRepository, MemberRepository memberRepository,
-            MemberConnectionRepository connectionRepository, VehicleAccountLinkRepository vehicleLinks,
-            VehicleAccountChallengeRepository vehicleChallenges, RideRequestRepository rideRequests,
-            PickupRepository pickups, ArrivalPushService arrivalPush, PlatformTransactionManager transactions, Clock clock,
+    public KakaoUnlinkService(KakaoUnlinkRepository unlinkRepository, MemberDeletionService deletionService,
+            PlatformTransactionManager transactions, Clock clock,
             @Value("${majung.login.kakao-admin-key:}") String adminKey,
             @Value("${majung.login.kakao-app-id:}") String appId,
             @Value("${majung.login.unlink-cleanup-enabled:true}") boolean cleanupEnabled) {
         this.unlinkRepository = unlinkRepository;
-        this.memberRepository = memberRepository;
-        this.connectionRepository = connectionRepository;
-        this.vehicleLinks = vehicleLinks;
-        this.vehicleChallenges = vehicleChallenges;
-        this.rideRequests = rideRequests;
-        this.pickups = pickups;
-        this.arrivalPush = arrivalPush;
+        this.deletionService = deletionService;
         this.transaction = new TransactionTemplate(transactions);
         this.transaction.setTimeout(2);
         this.clock = clock;
@@ -100,26 +86,7 @@ public class KakaoUnlinkService {
     public void cleanupOne(String subject) {
         transaction.executeWithoutResult(status -> {
             if (unlinkRepository.lockBySubject(subject).isEmpty()) return;
-            memberRepository.findByProviderAndProviderSubject("kakao", subject).ifPresent(candidate -> {
-                memberRepository.lockById(candidate.id).ifPresent(member -> {
-                    for (RideRequest request : rideRequests.forMember(member.id)) {
-                        if (request.pickupId != null) pickups.findLockedById(request.pickupId).ifPresent(pickup -> {
-                            if (!pickup.isTerminal()) {
-                                pickup.status=Pickup.Status.CANCELLED; pickup.endedAt=clock.instant();
-                                pickup.inviteHash=null; pickup.clearProposal(); pickup.clearVehicle();
-                            }
-                            arrivalPush.remove(pickup.id);
-                        });
-                        rideRequests.delete(request);
-                    }
-                    rideRequests.flush();
-                    connectionRepository.deleteForMember(member.id);
-                    vehicleChallenges.deleteForMember(member.id);
-                    vehicleLinks.deleteForMember(member.id);
-                    memberRepository.delete(member);
-                    memberRepository.flush();
-                });
-            });
+            deletionService.deleteKakaoMemberIfPresent(subject);
             unlinkRepository.deleteById(subject);
         });
     }

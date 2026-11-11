@@ -153,6 +153,13 @@ public class RideRequestService {
         members.current(self);
         return requests.passengerRequests(self, PageRequest.of(0, 50)).stream().map(request -> view(request, false)).toList();
     }
+    @Transactional(readOnly = true)
+    public List<Object> passengerRevision(UUID self) {
+        return passenger(self).stream().map(v -> (Object) List.of(
+                v.requestId(), v.status(), v.nickname(), String.valueOf(v.majungId()), v.place(),
+                String.valueOf(v.peopleAhead()), v.currentPickupRemainingSeconds() != null, v.driverInvitation()
+        )).toList();
+    }
     public List<RideRequestApi.View> received(String auth) {
         UUID driver = deviceDriver(auth);
         return requests.findByDriverIdOrderByCreatedAtAscIdAsc(driver).stream().filter(this::open)

@@ -27,9 +27,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class PickupEventStreams {
     public record State(PickupApi.Snapshot pickup, PickupApi.VehicleState vehicle) {
         Object revision() {
-            return List.of(pickup, vehicle.freshness(), vehicle.sequence(), vehicle.placeVersion(), vehicle.latitude() != null);
+            return java.util.Arrays.asList(pickup, vehicle.freshness(), vehicle.sequence(), vehicle.placeVersion(), vehicle.latitude() != null);
         }
     }
+
+    private record StreamSample(Object revision, boolean terminal) { }
+
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "pickup-sse");
         thread.setDaemon(true);
@@ -41,7 +44,20 @@ public class PickupEventStreams {
     private final java.util.Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
 
     public SseEmitter open(UUID id, Supplier<State> read) {
-        State initial = read.get(); // Reject invalid credentials before starting an HTTP stream.
+        return openStream(id, () -> {
+            State state = read.get();
+            String status = state.pickup() == null ? null : state.pickup().status();
+            boolean terminal = "COMPLETED".equals(status) || "CANCELLED".equals(status) || "EXPIRED".equals(status);
+            return new StreamSample(state.revision(), terminal);
+        });
+    }
+
+    public SseEmitter openRevision(UUID key, Supplier<Object> readRevision) {
+        return openStream(key, () -> new StreamSample(readRevision.get(), false));
+    }
+
+    private SseEmitter openStream(UUID id, Supplier<StreamSample> read) {
+        StreamSample initial = read.get(); // Reject invalid credentials before starting an HTTP stream.
         synchronized (this) {
             if (stopping) throw new ApiException(503, "STREAM_PAUSED", "서버 연결을 다시 준비하고 있어요.");
             if (total >= 64 || counts.getOrDefault(id, 0) >= 4)
@@ -68,17 +84,17 @@ public class PickupEventStreams {
         emitter.onError(error -> cleanup.run());
         if (stopping) { cleanup.run(); emitter.complete(); return emitter; }
         AtomicReference<Object> previous = new AtomicReference<>();
-        AtomicReference<State> first = new AtomicReference<>(initial);
+        AtomicReference<StreamSample> first = new AtomicReference<>(initial);
         long[] lastSent = {0};
         ScheduledFuture<?> task = executor.scheduleWithFixedDelay(() -> {
             if (closed.get()) return;
             if (stopping) { cleanup.run(); emitter.complete(); return; }
             try {
-                State state = first.getAndSet(null);
+                StreamSample state = first.getAndSet(null);
                 if (state == null) state = read.get();
                 Object revision = state.revision();
                 long now = System.nanoTime();
-                if (!revision.equals(previous.get())) {
+                if (!java.util.Objects.equals(revision, previous.get())) {
                     emitter.send(SseEmitter.event().name("changed").data("refresh"));
                     previous.set(revision);
                     lastSent[0] = now;
@@ -86,7 +102,7 @@ public class PickupEventStreams {
                     emitter.send(SseEmitter.event().comment("keepalive"));
                     lastSent[0] = now;
                 }
-                if (List.of("COMPLETED", "CANCELLED", "EXPIRED").contains(state.pickup().status())) { cleanup.run(); emitter.complete(); }
+                if (state.terminal()) { cleanup.run(); emitter.complete(); }
             } catch (ApiException denied) {
                 try { emitter.send(SseEmitter.event().name("access-ended").data("refresh")); }
                 catch (IOException | IllegalStateException ignored) { }

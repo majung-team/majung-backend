@@ -81,14 +81,17 @@ public class AccountApi {
     ) { }
 
     private final MemberService memberService;
+    private final MemberDeletionService deletionService;
     private final NativeAuthHandoffService nativeAuth;
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
     private final boolean enabled;
 
     public AccountApi(MemberService memberService,
+                      MemberDeletionService deletionService,
                       NativeAuthHandoffService nativeAuth,
                       @Value("${majung.login.enabled:false}") boolean enabled) {
         this.memberService = memberService;
+        this.deletionService = deletionService;
         this.nativeAuth = nativeAuth;
         this.enabled = enabled;
     }
@@ -176,6 +179,23 @@ public class AccountApi {
     @PatchMapping("/api/v1/accounts/me")
     Profile nickname(@Parameter(hidden = true) Authentication authentication, @Valid @RequestBody Nickname request) {
         return memberService.nickname(AccountIdentity.requireMember(authentication), request.nickname());
+    }
+
+    @Operation(summary = "회원 탈퇴 (계정 삭제)", description = "로그인한 회원 계정과 연결·차량 링크·대기 요청을 삭제하고 세션을 종료합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "회원 탈퇴 및 세션 정리 완료"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
+    })
+    @DeleteMapping("/api/v1/accounts/me")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    void deleteMe(@Parameter(hidden = true) Authentication authentication,
+                  HttpServletRequest request, HttpServletResponse response) {
+        deletionService.deleteMemberById(AccountIdentity.requireMember(authentication));
+        HttpSession session = request.getSession(false);
+        if (session != null) session.invalidate();
+        SecurityContextHolder.clearContext();
+        response.addHeader("Set-Cookie", org.springframework.http.ResponseCookie.from("JSESSIONID", "")
+                .path("/").maxAge(0).httpOnly(true).secure(true).sameSite("Lax").build().toString());
     }
 
     @Operation(summary = "회원 검색", description = "마중 아이디 또는 닉네임으로 다른 회원을 검색합니다.")

@@ -45,6 +45,10 @@ public class ArrivalPushService {
 
     public boolean enabled() { return transport.enabled(); }
 
+    public boolean webPushEnabled() { return transport.webPushEnabled(); }
+
+    public boolean apnsEnabled() { return transport.apnsEnabled(); }
+
     public String publicKey() { return transport.publicKey(); }
 
     public void subscribe(UUID pickupId, String endpoint, long placeVersion) {
@@ -56,7 +60,7 @@ public class ArrivalPushService {
 
     public void subscribe(UUID pickupId, PickupApi.ArrivalPushRequest request, long placeVersion, String targetPath) {
         if (!transport.enabled()) throw new ApiException(404,"PUSH_DISABLED","이 서버에서는 도착 알림을 사용할 수 없습니다.");
-        String valid = PushEndpoint.validate(request.endpoint());
+        String valid = PushEndpoint.validate(request.endpoint(), transport.apnsEnabled());
         if ((request.p256dh() == null) != (request.auth() == null)) throw new ApiException(400,"INVALID_PUSH_KEY","알림 암호화 정보를 다시 확인해주세요.");
         if (request.p256dh() != null) {
             try {

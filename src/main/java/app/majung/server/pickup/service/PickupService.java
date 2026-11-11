@@ -120,7 +120,7 @@ public class PickupService {
         return reissueInvitation(pickup);
     }
 
-    // Only the driver can disconnect the current passenger; the passenger's token stops working immediately.
+    // Only the driver can disconnect an active passenger; a guest waiting for approval can leave cleanly.
     public PickupApi.Invitation disconnectParticipant(UUID id, String auth) {
         Pickup pickup = owner(id, auth);
         requireOpen(pickup);
@@ -131,6 +131,19 @@ public class PickupService {
             throw error(409, "NO_PARTICIPANT", "연결된 탑승자가 없습니다.");
         }
         return reissueInvitation(pickup);
+    }
+
+    public void leaveWaiting(UUID id, String auth) {
+        String token = tokenService.bearer(auth);
+        Pickup pickup = locked(id);
+        requireOpen(pickup);
+        if (!tokenService.matches(token, pickup.participantHash)) {
+            throw error(403, "FORBIDDEN", "참여 중인 탑승자만 대기를 나갈 수 있습니다.");
+        }
+        if (pickup.status != Pickup.Status.WAITING_APPROVAL) {
+            throw error(409, "INVALID_STATE", "승인 대기 중에만 참여 대기를 나갈 수 있습니다.");
+        }
+        reissueInvitation(pickup);
     }
 
     private PickupApi.Invitation reissueInvitation(Pickup pickup) {
