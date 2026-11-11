@@ -16,8 +16,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.session.Session;
+import org.springframework.session.SessionRepository;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
@@ -97,6 +101,8 @@ public class AccountFlowTest {
     @Autowired KakaoUnlinkRepository unlinkRepository;
     @Autowired MemberRepository memberRepository;
     @Autowired MemberConnectionRepository memberConnectionRepository;
+    @SuppressWarnings("rawtypes")
+    @Autowired SessionRepository sessionRepository;
     MockMvc mvc;
     final JsonMapper json = JsonMapper.builder().build();
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -279,5 +285,149 @@ public class AccountFlowTest {
             var connections = executor.invokeAll(requests);
             assertEquals(connections.get(0).get(), connections.get(1).get());
         } finally { executor.shutdownNow(); }
+    }
+
+    private static String challengeFor(String verifier) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+    }
+
+    @Test void nativeIosLoginIssuesOneTimePkceCodeInvalidatesBrowserAndExchangesSession() throws Exception {
+        mvc.perform(get("/api/v1/auth/ios/login").param("challenge", "short"))
+                .andExpect(status().isBadRequest());
+
+        String verifier = "native_verifier_0123456789_abcdefghijklmnop";
+        assertEquals(43, verifier.length());
+        String challenge = challengeFor(verifier);
+
+        MvcResult iosStart = mvc.perform(get("/api/v1/auth/ios/login").param("challenge", challenge))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/api/v1/auth/authorize/kakao"))
+                .andReturn();
+        MockHttpSession browserSession = (MockHttpSession) iosStart.getRequest().getSession(false);
+        assertNotNull(browserSession);
+
+        // Failure on iOS auth flow redirects back to app failure callback instead of web /account
+        MvcResult oauthAuthorize = mvc.perform(get("/api/v1/auth/authorize/kakao").session(browserSession))
+                .andExpect(status().isFound())
+                .andReturn();
+        String state = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(
+                oauthAuthorize.getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+
+        mvc.perform(get("/api/v1/auth/callback/kakao").session(browserSession)
+                        .param("state", "wrong-state").param("code", "fixture-code"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("majung://auth/callback?status=failed"));
+        assertTrue(browserSession.isInvalid());
+
+        // Fresh valid iOS OAuth login
+        subject.incrementAndGet();
+        MvcResult iosStartTwo = mvc.perform(get("/api/v1/auth/ios/login").param("challenge", challenge))
+                .andExpect(status().isFound()).andReturn();
+        MockHttpSession validBrowser = (MockHttpSession) iosStartTwo.getRequest().getSession(false);
+        MvcResult authorizeTwo = mvc.perform(get("/api/v1/auth/authorize/kakao").session(validBrowser)).andReturn();
+        String validState = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(
+                authorizeTwo.getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+
+        MvcResult callback = mvc.perform(get("/api/v1/auth/callback/kakao").session(validBrowser)
+                        .param("state", validState).param("code", "fixture-code"))
+                .andExpect(status().isFound())
+                .andReturn();
+        String redirected = callback.getResponse().getRedirectedUrl();
+        assertNotNull(redirected);
+        assertTrue(redirected.startsWith("majung://auth/callback?code="));
+        assertFalse(redirected.contains("fixture-provider-token"));
+        assertTrue(validBrowser.isInvalid());
+
+        String handoffCode = UriComponentsBuilder.fromUriString(redirected).build().getQueryParams().getFirst("code");
+        assertNotNull(handoffCode);
+
+        // Wrong verifier fails with 401 and consumes the one-time handoff code
+        String wrongVerifier = "wrong_verifier_0123456789_abcdefghijklmnopq";
+        mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + handoffCode + "\",\"verifier\":\"" + wrongVerifier + "\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + handoffCode + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // Second valid flow + real exchange -> session + nickname update -> logout
+        subject.incrementAndGet();
+        MvcResult iosStartThree = mvc.perform(get("/api/v1/auth/ios/login").param("challenge", challenge)).andReturn();
+        MockHttpSession browserThree = (MockHttpSession) iosStartThree.getRequest().getSession(false);
+        String stateThree = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(
+                mvc.perform(get("/api/v1/auth/authorize/kakao").session(browserThree)).andReturn()
+                        .getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+        String codeThree = UriComponentsBuilder.fromUriString(
+                mvc.perform(get("/api/v1/auth/callback/kakao").session(browserThree)
+                                .param("state", stateThree).param("code", "fixture-code"))
+                        .andReturn().getResponse().getRedirectedUrl()).build().getQueryParams().getFirst("code");
+
+        MvcResult exchanged = mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + codeThree + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profileReady").value(false))
+                .andReturn();
+        MockHttpSession appSession = (MockHttpSession) exchanged.getRequest().getSession(false);
+        assertNotNull(appSession);
+
+        // Handoff code cannot be replayed
+        mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + codeThree + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        JsonNode sessionInfo = tree(mvc.perform(get("/api/v1/auth/session").session(appSession))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertTrue(sessionInfo.path("authenticated").asBoolean());
+        String csrf = sessionInfo.path("csrfToken").asText();
+        assertFalse(csrf.isBlank());
+
+        // State changes still require valid CSRF token
+        mvc.perform(patch("/api/v1/accounts/me").session(appSession)
+                        .contentType("application/json").content("{\"nickname\":\"iOS승객\"}"))
+                .andExpect(status().isForbidden());
+        JsonNode updated = tree(mvc.perform(patch("/api/v1/accounts/me").session(appSession)
+                        .header("X-CSRF-TOKEN", csrf)
+                        .contentType("application/json").content("{\"nickname\":\"iOS승객\"}"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertEquals("iOS승객", updated.path("nickname").asText());
+        assertTrue(updated.path("profileReady").asBoolean());
+
+        // Logout clears session
+        mvc.perform(post("/api/v1/auth/logout").session(appSession).header("X-CSRF-TOKEN", csrf))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/accounts/me").session(appSession)).andExpect(status().isUnauthorized());
+
+        // Verify unlinked member blocked during exchange
+        String providerSub = memberRepository.findById(UUID.fromString(updated.path("memberId").asText()))
+                .orElseThrow().providerSubject;
+        @SuppressWarnings("unchecked")
+        Session expiredHandoff = sessionRepository.createSession();
+        expiredHandoff.setAttribute("majung.native.ios.handoffMemberId", updated.path("memberId").asText());
+        expiredHandoff.setAttribute("majung.native.ios.handoffChallenge", challenge);
+        expiredHandoff.setAttribute("majung.native.ios.handoffExpiresAt", System.currentTimeMillis() - 1000L);
+        sessionRepository.save(expiredHandoff);
+        mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + expiredHandoff.getId() + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        @SuppressWarnings("unchecked")
+        Session unlinkedHandoff = sessionRepository.createSession();
+        unlinkedHandoff.setAttribute("majung.native.ios.handoffMemberId", updated.path("memberId").asText());
+        unlinkedHandoff.setAttribute("majung.native.ios.handoffChallenge", challenge);
+        unlinkedHandoff.setAttribute("majung.native.ios.handoffExpiresAt", System.currentTimeMillis() + 60_000L);
+        sessionRepository.save(unlinkedHandoff);
+        unlinkService.receive("KakaoAK fixture-admin-key", "fixture-app-id", providerSub, "UNLINK_FROM_APPS");
+        mvc.perform(post("/api/v1/auth/ios/exchange")
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + unlinkedHandoff.getId() + "\",\"verifier\":\"" + verifier + "\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }

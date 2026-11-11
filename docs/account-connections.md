@@ -148,11 +148,22 @@ SPRING_SESSION_ATTRIBUTES
 | Method | 경로 | 기능 |
 | --- | --- | --- |
 | `GET` | `/api/v1/auth/session` | 로그인 설정·계정 정보·CSRF 확인 |
-| `GET` | `/api/v1/auth/login` | 카카오 로그인 시작 |
+| `GET` | `/api/v1/auth/login` | 웹 카카오 로그인 시작 |
+| `GET` | `/api/v1/auth/ios/login?challenge=...` | iOS 앱 PKCE 기반 카카오 로그인 시작 |
+| `POST` | `/api/v1/auth/ios/exchange` | iOS 일회용 코드·verifier 검증 후 세션 발급 |
 | `POST` | `/api/v1/auth/logout` | 로그아웃 |
 | `GET` | `/api/v1/accounts/me` | 내 계정 조회 |
 | `PATCH` | `/api/v1/accounts/me` | 닉네임 설정 및 변경 |
 | `GET` | `/api/v1/accounts/search?query=...&page=0` | 사용자 검색 |
+
+### iOS 앱 로그인 결과 전달
+
+iOS 앱은 `ASWebAuthenticationSession`과 `GET /api/v1/auth/ios/login?challenge=...`를 사용해 로그인을 시작한다.
+
+- 서버는 카카오 콜백 경로(`/api/v1/auth/callback/kakao`)를 웹과 동일하게 유지하며 카카오 액세스 토큰이나 회원번호를 앱에 전달하지 않는다.
+- 로그인 완료 시 웹 브라우저는 `majung://auth/callback?code=<일회용 UUID>`로 복귀하고, OAuth2용 브라우저 세션은 즉시 무효화한다.
+- 앱은 `POST /api/v1/auth/ios/exchange`에 `code`와 `verifier`를 보내 120초 유효 일회용 코드를 검증·소비한 뒤 공유 세션 쿠키(`JSESSIONID`)를 발급받는다.
+- 이후 닉네임 변경·로그아웃 등 상태 변경 API는 웹과 동일하게 세션 쿠키와 CSRF 검증을 거친다.
 
 ### CSRF 처리
 
