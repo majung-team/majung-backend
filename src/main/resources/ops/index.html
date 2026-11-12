@@ -55,14 +55,11 @@
       <section class="target-bar">
         <div class="target-bar-main">
           <div>
-            <span class="target-label">대상 실회원 계정</span>
-            <div class="target-row">
-              <select id="active-target-select"></select>
-              <button class="btn btn-secondary btn-sm" id="copy-target-id-btn" type="button">마중 ID 복사</button>
-              <span id="target-vehicle-pill" class="badge badge-slate">차량 확인 중</span>
-            </div>
+            <span class="target-label">테스트 방식 선택</span>
+            <p class="muted"><strong>차량용 앱</strong>부터 시작하거나 <strong>휴대전화 앱</strong>부터 시작해 관리자 콘솔을 상대방 역할로 쓸 수 있습니다.</p>
           </div>
           <div class="mini-stats">
+            <span class="stat-pill">실차량 <strong id="kpi-real-vehicles">-</strong></span>
             <span class="stat-pill">실회원 <strong id="kpi-real">-</strong></span>
             <span class="stat-pill">더미 <strong id="kpi-dummy">-</strong></span>
             <span class="stat-pill">진행 픽업 <strong id="kpi-pickups">-</strong></span>
@@ -72,18 +69,114 @@
       </section>
 
       <nav class="tab-bar" role="tablist">
-        <button class="tab-btn active" type="button" data-tab="passenger">휴대전화 앱 테스트 (탑승자)</button>
-        <button class="tab-btn" type="button" data-tab="driver">차량용 앱 · 에뮬레이터 (운전자)</button>
+        <button class="tab-btn active" type="button" data-tab="driver">차량용 앱부터 테스트 (상대방 대행)</button>
+        <button class="tab-btn" type="button" data-tab="passenger">휴대전화 앱부터 테스트 (더미 운전자 대행)</button>
         <button class="tab-btn" type="button" data-tab="manage">게스트 · QR · 전체 현황</button>
       </nav>
 
-      <!-- TAB 1: PHONE APP (PASSENGER ROLE) -->
-      <section id="tab-passenger" class="tab-panel">
+      <!-- TAB 1: VEHICLE / EMULATOR APP FIRST -->
+      <section id="tab-driver" class="tab-panel">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>1단계 · 내 차량용 앱(에뮬레이터) 선택</h2>
+              <p class="muted">iPhone 계정을 먼저 연결하지 않아도 등록된 차량 또는 차량 코드(<code>VEH-...</code>)로 바로 시작할 수 있습니다.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="driver-issue-reg-code-btn" type="button">새 차량 기기 등록 코드 발급</button>
+          </div>
+
+          <div class="target-row compact-gap">
+            <select id="active-vehicle-select"></select>
+            <button class="btn btn-secondary btn-sm" id="copy-vehicle-code-btn" type="button">차량 코드 복사</button>
+            <span id="vehicle-link-pill" class="badge badge-slate">차량 확인 중</span>
+          </div>
+
+          <div class="inline-form compact-gap">
+            <input id="vehicle-code-find-input" type="text" placeholder="차량 앱에 표시된 코드 직접 찾기 (예: VEH-7K2M9A)" />
+            <button class="btn btn-secondary btn-sm" id="find-vehicle-code-btn" type="button">코드로 선택</button>
+          </div>
+
+          <p class="mono muted compact-gap hidden" id="driver-reg-code-output"></p>
+          <div id="driver-mode-status" class="role-notice compact-gap"></div>
+        </div>
+
+        <div class="card">
+          <h2>2단계 · 다른 사용자(탑승자) 역할 대행</h2>
+          <p class="muted">선택한 차량용 앱으로 마중 요청을 보내거나, QR 연결·게스트 참여를 콘솔이 대신 수행합니다.</p>
+
+          <div class="grid-two compact-gap">
+            <label class="inline-place-label">더미 탑승자 계정
+              <select id="driver-passenger-select"></select>
+            </label>
+            <label class="inline-place-label">만날 장소
+              <select id="driver-place-select"></select>
+            </label>
+          </div>
+
+          <div class="quick-grid">
+            <button class="quick-btn quick-primary" id="q-dummy-req-my-car-btn" type="button">
+              <strong>다른 사용자로 마중 요청 보내기</strong>
+              <span>미연결 차량에서도 가능 · 차량용 앱으로 즉시 대기 요청(PENDING)을 보냅니다</span>
+            </button>
+            <button class="quick-btn" id="q-connect-dummy-btn" type="button">
+              <strong>다른 사용자 지인 연결</strong>
+              <span>차량에 운전자 계정 연결 후, 차량 앱 초대 목록에 쓸 더미 탑승자를 연결합니다</span>
+            </button>
+          </div>
+
+          <div class="grid-two compact-gap">
+            <div class="subbox">
+              <h3>차량 QR 연결 대행 (<code>#vehicle</code>)</h3>
+              <p class="muted">차량 앱에 뜬 QR 링크를 붙여넣으면 콘솔의 다른 사용자가 스캔을 대행해 차량 화면에 승인 요청이 뜹니다.</p>
+              <div class="form-stack compact-gap">
+                <input id="claim-qr-link-input" type="text" placeholder="https://majung.cloud/#vehicle/..." />
+                <label>연결할 테스트 계정 <select id="claim-qr-member-select"></select></label>
+                <button class="btn btn-primary btn-sm" id="claim-qr-btn" type="button">이 사용자로 차량 QR 연결 요청</button>
+              </div>
+            </div>
+
+            <div class="subbox">
+              <h3>게스트 초대 참여 대행 (<code>#join</code>)</h3>
+              <p class="muted">차량 앱에서 만든 게스트 초대 링크를 붙여넣으면 콘솔에서 다른 게스트로 참여해 준비 상태·메시지를 보냅니다.</p>
+              <div class="form-stack compact-gap">
+                <input id="join-guest-link-input" type="text" placeholder="https://majung.cloud/#join/..." />
+                <input id="join-guest-name-input" type="text" placeholder="표시 이름 (비우면 콘솔 게스트)" />
+                <button class="btn btn-primary btn-sm" id="join-guest-btn" type="button">게스트로 초대 참여하기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>3단계 · 선택 차량 대기 요청 및 발송 초대</h2>
+          <p class="muted">차량 앱으로 보낸 직접 요청 상태 또는 차량에서 보낸 초대에 대한 더미 탑승자 수락·거절을 처리합니다.</p>
+          <div id="driver-mode-requests" class="stack-list compact-gap"></div>
+        </div>
+
+        <div class="card">
+          <h2>4단계 · 선택 차량 진행 중 픽업 · 상대방(탑승자/게스트) 제어</h2>
+          <p class="muted">차량 앱에서 요청을 수락·출발시키면 여기서 다른 사용자의 준비 완료, 메시지, 다른 장소 제안을 바로 전송할 수 있습니다.</p>
+          <div id="driver-mode-pickups" class="stack-list compact-gap"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: PHONE APP (PASSENGER ROLE) -->
+      <section id="tab-passenger" class="tab-panel hidden">
+        <div class="card">
+          <h2>대상 실회원 계정 (휴대전화 앱)</h2>
+          <p class="muted">휴대전화(iOS) 앱으로 테스트할 내 계정을 고르고, 서버 더미 운전자가 수락·주행·초대를 보내도록 제어합니다.</p>
+          <div class="target-row compact-gap">
+            <select id="active-target-select"></select>
+            <button class="btn btn-secondary btn-sm" id="copy-target-id-btn" type="button">마중 ID 복사</button>
+            <span id="target-vehicle-pill" class="badge badge-slate">차량 확인 중</span>
+          </div>
+        </div>
+
         <div class="card">
           <div class="section-head">
             <div>
               <h2>더미 운전자 이벤트 실행</h2>
-              <p class="muted">선택한 대상 계정을 탑승자로 두고 서버 더미 운전자의 응답과 픽업 상태를 생성합니다.</p>
+              <p class="muted">선택한 휴대전화 계정을 탑승자로 두고 서버 더미 운전자의 응답과 픽업 상태를 생성합니다.</p>
             </div>
           </div>
           <div class="quick-grid">
@@ -110,44 +203,6 @@
           <h2>진행 중 더미 차량 픽업 제어</h2>
           <p class="muted">더미 차량의 접근, 도착(ARRIVED), 장소 제안 승인, 탑승 완료 상태를 제어합니다.</p>
           <div id="passenger-mode-pickups" class="stack-list compact-gap"></div>
-        </div>
-      </section>
-
-      <!-- TAB 2: VEHICLE / EMULATOR APP (DRIVER ROLE) -->
-      <section id="tab-driver" class="tab-panel hidden">
-        <div class="card">
-          <h2>대상 차량 수신 시뮬레이션</h2>
-          <p class="muted">대상 계정에 연결된 차량용 앱(에뮬레이터)으로 들어오는 더미 탑승자 요청과 지인 연결을 생성합니다.</p>
-          <div id="driver-mode-status" class="role-notice compact-gap"></div>
-
-          <div class="inline-place-row compact-gap">
-            <label class="inline-place-label">만날 장소
-              <select id="driver-place-select"></select>
-            </label>
-          </div>
-
-          <div class="quick-grid">
-            <button class="quick-btn quick-primary" id="q-dummy-req-my-car-btn" type="button">
-              <strong>더미 탑승자 마중 요청 전송</strong>
-              <span>대상 계정의 차량으로 대기 요청(PENDING)을 즉시 등록합니다</span>
-            </button>
-            <button class="quick-btn" id="q-connect-dummy-btn" type="button">
-              <strong>더미 탑승자 지인 연결</strong>
-              <span>차량용 앱의 초대 대상 목록에 사용할 더미 탑승자를 연결합니다</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>대상 차량 대기 요청 및 발송 초대</h2>
-          <p class="muted">차량에서 발송한 초대에 대한 더미 탑승자 응답(수락·거절) 또는 요청 취소를 처리합니다.</p>
-          <div id="driver-mode-requests" class="stack-list compact-gap"></div>
-        </div>
-
-        <div class="card">
-          <h2>진행 중 픽업 · 더미 탑승자 상태 제어</h2>
-          <p class="muted">차량용 앱에서 운행을 시작한 뒤 더미 탑승자의 준비 상태, 빠른 메시지, 장소 제안을 전송합니다.</p>
-          <div id="driver-mode-pickups" class="stack-list compact-gap"></div>
         </div>
       </section>
 

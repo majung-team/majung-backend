@@ -51,12 +51,21 @@ public class OpsConsoleApi {
                                 boolean dummy, boolean driver, UUID vehicleId, String vehicleName,
                                 String vehicleCode, Instant createdAt) { }
 
+    public record OpsVehicleItem(UUID vehicleId, String vehicleCode, String displayName,
+                                 String vehicleModel, String licensePlate, String ownerHint,
+                                 boolean dummy, boolean directRequestEnabled,
+                                 boolean linked, UUID linkedMemberId, String linkedMemberMajungId,
+                                 String linkedMemberNickname, boolean linkedMemberDummy,
+                                 Instant registeredAt) { }
+
     public record OpsRequestItem(UUID requestId, String status, boolean controllable, boolean dummyPassenger,
                                  UUID driverId, String driverName, UUID passengerId, String passengerName,
+                                 UUID vehicleId, String vehicleCode,
                                  String placeLabel, double placeLatitude, double placeLongitude, UUID pickupId,
                                  boolean driverInvitation, Long queueOrder, Instant createdAt, Instant expiresAt) { }
 
     public record OpsPickupItem(UUID pickupId, String status, boolean controllable, boolean dummyPassenger,
+                                boolean guestControllable, UUID vehicleId, String vehicleCode,
                                 String vehicleName, String participantName, String placeLabel,
                                 double placeLatitude, double placeLongitude,
                                 Double vehicleLatitude, Double vehicleLongitude, Long durationSeconds,
@@ -70,11 +79,12 @@ public class OpsConsoleApi {
                                String code, String link, Instant expiresAt, String claimantMajungId) { }
 
     public record OpsStats(long totalMembers, long realMembers, long dummyMembers, long linkedVehicles,
-                           long openPickups, long openRequests) { }
+                           long realVehicles, long openPickups, long openRequests) { }
 
     public record OpsState(boolean deployment, String slot, OpsStats stats,
-                           List<OpsMemberItem> members, List<OpsRequestItem> requests,
-                           List<OpsPickupItem> pickups, OpsGuestInvite guestInvite, OpsVehicleQr vehicleQr) { }
+                           List<OpsMemberItem> members, List<OpsVehicleItem> vehicles,
+                           List<OpsRequestItem> requests, List<OpsPickupItem> pickups,
+                           OpsGuestInvite guestInvite, OpsVehicleQr vehicleQr) { }
 
     public record ResetBody(Boolean withSamplePickups) { }
 
@@ -98,6 +108,15 @@ public class OpsConsoleApi {
     public record ConfirmQrBody(UUID challengeId) { }
 
     public record QuickActionBody(UUID targetMemberId, String kind, String placeLabel, Double latitude, Double longitude) { }
+
+    public record VehicleRequestBody(UUID vehicleId, String vehicleCode, UUID passengerId,
+                                     String placeLabel, Double latitude, Double longitude) { }
+
+    public record VehicleConnectBody(UUID vehicleId, String vehicleCode, UUID dummyId) { }
+
+    public record ClaimQrBody(String link, UUID challengeId, String code, UUID memberId) { }
+
+    public record GuestJoinBody(String link, UUID pickupId, String inviteToken, String displayName) { }
 
     public record QuickActionResult(String message, OpsState state) { }
 
@@ -328,13 +347,62 @@ public class OpsConsoleApi {
         return new QuickActionResult(message, buildState(request));
     }
 
+    @PostMapping("/api/v1/ops/api/vehicles/request")
+    public QuickActionResult submitVehicleRequest(@RequestBody VehicleRequestBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null || (body.vehicleId() == null && (body.vehicleCode() == null || body.vehicleCode().isBlank()))) {
+            throw new ApiException(400, "VEHICLE_REQUIRED", "요청을 보낼 대상 차량을 선택하거나 차량 코드를 입력해주세요.");
+        }
+        PickupApi.Place overridePlace = body.placeLabel() != null && !body.placeLabel().isBlank()
+                && body.latitude() != null && body.longitude() != null
+                ? new PickupApi.Place(body.placeLabel().strip(), body.latitude(), body.longitude())
+                : null;
+        String message = seedService.submitRideRequestToVehicleAsDummy(
+                body.vehicleId(), body.vehicleCode(), body.passengerId(), overridePlace);
+        return new QuickActionResult(message, buildState(request));
+    }
+
+    @PostMapping("/api/v1/ops/api/vehicles/connect-dummy")
+    public QuickActionResult connectDummyToVehicle(@RequestBody VehicleConnectBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null || (body.vehicleId() == null && (body.vehicleCode() == null || body.vehicleCode().isBlank()))) {
+            throw new ApiException(400, "VEHICLE_REQUIRED", "대상 차량을 선택하거나 차량 코드를 입력해주세요.");
+        }
+        String message = seedService.connectDummyToVehicleDriver(body.vehicleId(), body.vehicleCode(), body.dummyId());
+        return new QuickActionResult(message, buildState(request));
+    }
+
+    @PostMapping("/api/v1/ops/api/vehicle-qr/claim")
+    public QuickActionResult claimVehicleQr(@RequestBody ClaimQrBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null) {
+            throw new ApiException(400, "QR_LINK_REQUIRED", "차량 QR 링크를 입력해주세요.");
+        }
+        String message = seedService.claimVehicleQrAsDummy(body.link(), body.challengeId(), body.code(), body.memberId());
+        return new QuickActionResult(message, buildState(request));
+    }
+
+    @PostMapping("/api/v1/ops/api/guest-join")
+    public QuickActionResult joinGuestInvite(@RequestBody GuestJoinBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null) {
+            throw new ApiException(400, "INVITE_LINK_REQUIRED", "게스트 초대 링크를 입력해주세요.");
+        }
+        String message = seedService.joinGuestPickupFromOps(body.link(), body.pickupId(), body.inviteToken(), body.displayName());
+        return new QuickActionResult(message, buildState(request));
+    }
+
     private OpsState buildState(HttpServletRequest request) {
         List<Member> allMembers = members.findAll();
         Map<UUID, Member> memberMap = allMembers.stream().collect(Collectors.toMap(m -> m.id, m -> m));
-        Map<UUID, RegisteredVehicle> vehicleMap = vehicles.findAll().stream()
+        List<RegisteredVehicle> allVehicles = vehicles.findAll();
+        Map<UUID, RegisteredVehicle> vehicleMap = allVehicles.stream()
                 .collect(Collectors.toMap(v -> v.id, v -> v));
-        Map<UUID, List<VehicleAccountLink>> linksByMember = links.findAll().stream()
+        List<VehicleAccountLink> allLinks = links.findAll();
+        Map<UUID, List<VehicleAccountLink>> linksByMember = allLinks.stream()
                 .collect(Collectors.groupingBy(l -> l.member.id));
+        Map<UUID, VehicleAccountLink> linkByVehicle = allLinks.stream()
+                .collect(Collectors.toMap(l -> l.vehicleId, l -> l, (a, b) -> a));
 
         List<OpsMemberItem> memberItems = allMembers.stream()
                 .sorted(Comparator.comparing((Member m) -> DevDummySeedService.DUMMY_PROVIDER.equals(m.provider) ? 1 : 0)
@@ -349,9 +417,32 @@ public class OpsConsoleApi {
                             DevDummySeedService.DUMMY_PROVIDER.equals(m.provider),
                             v != null,
                             v == null ? null : v.id,
-                            v == null ? null : v.displayName,
+                            v == null ? null : v.summaryDisplayName(),
                             v == null ? null : v.vehicleCode,
                             m.createdAt
+                    );
+                })
+                .toList();
+
+        List<OpsVehicleItem> vehicleItems = allVehicles.stream()
+                .filter(v -> v.revokedAt == null)
+                .sorted(Comparator.comparing((RegisteredVehicle v) -> seedService.isDummyVehicle(v.id) ? 1 : 0)
+                        .thenComparing(v -> v.registeredAt != null ? v.registeredAt : Instant.EPOCH, Comparator.reverseOrder())
+                        .thenComparing(v -> v.vehicleCode))
+                .map(v -> {
+                    boolean dummyVehicle = seedService.isDummyVehicle(v.id);
+                    VehicleAccountLink link = linkByVehicle.get(v.id);
+                    Member linkedMember = link == null ? null : memberMap.get(link.member.id);
+                    return new OpsVehicleItem(
+                            v.id, v.vehicleCode, v.summaryDisplayName(),
+                            v.vehicleModel, v.licensePlate, v.ownerHint,
+                            dummyVehicle, v.directRequestEnabled,
+                            linkedMember != null,
+                            linkedMember == null ? null : linkedMember.id,
+                            linkedMember == null ? null : linkedMember.majungId,
+                            linkedMember == null ? null : linkedMember.nickname,
+                            linkedMember != null && DevDummySeedService.DUMMY_PROVIDER.equals(linkedMember.provider),
+                            v.registeredAt
                     );
                 })
                 .toList();
@@ -362,15 +453,22 @@ public class OpsConsoleApi {
                         .thenComparing(r -> r.createdAt != null ? r.createdAt : Instant.EPOCH, Comparator.reverseOrder()))
                 .limit(50)
                 .map(r -> {
-                    Member drv = memberMap.get(r.driverId);
+                    Member drv = r.driverId == null ? null : memberMap.get(r.driverId);
                     Member pas = memberMap.get(r.passengerId);
-                    boolean controllable = drv != null && DevDummySeedService.DUMMY_PROVIDER.equals(drv.provider);
+                    RegisteredVehicle rv = r.vehicleId == null ? null : vehicleMap.get(r.vehicleId);
+                    boolean controllable = drv != null && DevDummySeedService.DUMMY_PROVIDER.equals(drv.provider)
+                            && (rv == null || seedService.isDummyVehicle(rv.id));
                     boolean dummyPassenger = pas != null && DevDummySeedService.DUMMY_PROVIDER.equals(pas.provider);
+                    String targetDisplay = drv != null
+                            ? drv.nickname + " (" + drv.majungId + ")"
+                            : (rv != null ? rv.summaryDisplayName() + " (" + rv.vehicleCode + ")" : "-");
                     return new OpsRequestItem(
                             r.id, r.status, controllable, dummyPassenger, r.driverId,
-                            drv == null ? "-" : drv.nickname + " (" + drv.majungId + ")",
+                            targetDisplay,
                             r.passengerId,
                             pas == null ? "-" : pas.nickname + " (" + pas.majungId + ")",
+                            r.vehicleId,
+                            rv == null ? null : rv.vehicleCode,
                             r.placeLabel, r.placeLatitude, r.placeLongitude,
                             r.pickupId, r.driverInvitation, r.queueOrder, r.createdAt, r.expiresAt
                     );
@@ -392,10 +490,13 @@ public class OpsConsoleApi {
                     RideRequest linkedReq = requestByPickup.get(p.id);
                     Member passenger = linkedReq == null ? null : memberMap.get(linkedReq.passengerId);
                     boolean dummyPassenger = passenger != null && DevDummySeedService.DUMMY_PROVIDER.equals(passenger.provider);
+                    boolean guestControllable = seedService.isOpsGuestPickup(p.id);
                     boolean controllable = seedService.isDummyVehicle(p.vehicleId);
                     return new OpsPickupItem(
-                            p.id, p.status.name(), controllable, dummyPassenger,
-                            rv == null ? "마중 차량" : rv.displayName,
+                            p.id, p.status.name(), controllable, dummyPassenger, guestControllable,
+                            p.vehicleId,
+                            rv == null ? null : rv.vehicleCode,
+                            rv == null ? "마중 차량" : rv.summaryDisplayName(),
                             p.participantName, p.placeLabel, p.placeLatitude, p.placeLongitude,
                             p.vehicleLatitude, p.vehicleLongitude, p.durationSeconds,
                             p.readiness == null ? null : p.readiness.name(),
@@ -408,11 +509,12 @@ public class OpsConsoleApi {
 
         long dummyCount = memberItems.stream().filter(OpsMemberItem::dummy).count();
         long realCount = memberItems.size() - dummyCount;
+        long realVehicleCount = vehicleItems.stream().filter(v -> !v.dummy()).count();
         long openPickups = allPickups.stream().filter(p -> !p.isTerminal()).count();
         long openRequests = allRequests.stream().filter(r -> isOpenStatus(r.status)).count();
 
         OpsStats stats = new OpsStats(
-                memberItems.size(), realCount, dummyCount, links.count(), openPickups, openRequests
+                memberItems.size(), realCount, dummyCount, links.count(), realVehicleCount, openPickups, openRequests
         );
 
         return new OpsState(
@@ -420,6 +522,7 @@ public class OpsConsoleApi {
                 currentSlot(),
                 stats,
                 memberItems,
+                vehicleItems,
                 reqItems,
                 pickupItems,
                 toGuestView(seedService.latestGuestInvite(), request),

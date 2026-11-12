@@ -24,8 +24,10 @@ import app.majung.server.pickup.repository.MemberRepository;
 import app.majung.server.pickup.repository.PickupRepository;
 import app.majung.server.pickup.repository.RegisteredVehicleRepository;
 import app.majung.server.pickup.repository.VehicleAccountLinkRepository;
+import app.majung.server.pickup.service.PickupService;
 import app.majung.server.pickup.service.RideRequestService;
 import app.majung.server.pickup.service.TokenService;
+import app.majung.server.pickup.service.VehicleAccountService;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.UUID;
@@ -61,6 +63,8 @@ class OpsConsoleTest {
     @Autowired VehicleAccountLinkRepository links;
     @Autowired PickupRepository pickups;
     @Autowired RideRequestService rideRequests;
+    @Autowired PickupService pickupService;
+    @Autowired VehicleAccountService vehicleAccounts;
     @Autowired TokenService tokens;
 
     private MockMvc mvc() {
@@ -286,5 +290,124 @@ class OpsConsoleTest {
         assertEquals(1, resetJson.path("stats").path("realMembers").asInt());
         assertFalse(members.findById(realUser.id).isEmpty());
         assertEquals("실폰 승준", members.findById(realUser.id).orElseThrow().nickname);
+    }
+
+    @Test
+    void vehicleFirstWorkflowSupportsUnlinkedDirectRequestsQrClaimGuestJoinAndResetPreservation() throws Exception {
+        MockMvc mvc = mvc();
+
+        MvcResult loginRes = mvc.perform(post("/api/v1/ops/api/login")
+                        .with(r -> { r.setRemoteAddr("10.10.0.25"); return r; })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"adminKey\":\"" + ADMIN_KEY + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie opsCookie = new Cookie(OpsSessionService.COOKIE_NAME,
+                loginRes.getResponse().getCookie(OpsSessionService.COOKIE_NAME).getValue());
+        String csrf = JSON.readTree(loginRes.getResponse().getContentAsString()).path("csrfToken").asText();
+
+        // Register a physical/emulator vehicle with ZERO iPhone real members linked
+        String unlinkedRawToken = tokens.issue();
+        RegisteredVehicle unlinkedCar = new RegisteredVehicle();
+        unlinkedCar.id = UUID.randomUUID();
+        unlinkedCar.credentialHash = tokens.hash(unlinkedRawToken);
+        unlinkedCar.displayName = "에뮬레이터 아이오닉5";
+        unlinkedCar.vehicleModel = "아이오닉 5";
+        unlinkedCar.licensePlate = "99허 8877";
+        unlinkedCar.registeredAt = Instant.now();
+        unlinkedCar = vehicles.saveAndFlush(unlinkedCar);
+        String carAuth = "Bearer " + unlinkedRawToken;
+
+        // 1. Real unlinked vehicle appears first in $.vehicles with its vehicleCode
+        mvc.perform(get("/api/v1/ops/api/state").cookie(opsCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vehicles[0].vehicleId").value(unlinkedCar.id.toString()))
+                .andExpect(jsonPath("$.vehicles[0].vehicleCode").value(unlinkedCar.vehicleCode))
+                .andExpect(jsonPath("$.vehicles[0].dummy").value(false))
+                .andExpect(jsonPath("$.vehicles[0].linked").value(false));
+
+        // 2. Ops Console sends direct dummy passenger request to the unlinked vehicle
+        mvc.perform(post("/api/v1/ops/api/vehicles/request")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"vehicleCode\":\"" + unlinkedCar.vehicleCode + "\",\"placeLabel\":\"판교역 2번 출구\",\"latitude\":37.3947,\"longitude\":127.1112}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        var incoming = rideRequests.received(carAuth);
+        assertEquals(1, incoming.size());
+        UUID reqId = incoming.get(0).requestId();
+        rideRequests.accept(carAuth, reqId);
+        RideRequestApi.Started started = rideRequests.start(carAuth, reqId);
+
+        // Ops Console acts as the dummy passenger during the unlinked vehicle's live pickup
+        mvc.perform(post("/api/v1/ops/api/pickups/passenger-action")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pickupId\":\"" + started.pickupId() + "\",\"readiness\":\"READY\",\"quickMessage\":\"출구 앞이에요\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participant.readiness").value("READY"));
+
+        // Arrive and finish pickup cleanly via pickup driver token
+        String pickupDriverAuth = "Bearer " + started.driverToken();
+        pickupService.arrivePickup(started.pickupId(), pickupDriverAuth);
+        pickupService.endPickup(started.pickupId(), pickupDriverAuth, Pickup.Status.COMPLETED);
+
+        // 3. Vehicle creates QR challenge; Ops Console claims it on behalf of a dummy user, then vehicle confirms
+        var qr = vehicleAccounts.issue(carAuth);
+        String qrLink = "https://majung.cloud/#vehicle/" + qr.challengeId() + "/" + qr.code();
+        mvc.perform(post("/api/v1/ops/api/vehicle-qr/claim")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"link\":\"" + qrLink + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.vehicles[0].vehicleId").value(unlinkedCar.id.toString()));
+
+        vehicleAccounts.confirm(carAuth, qr.challengeId());
+
+        // Linking a dummy account lets Ops connect dummy friends to it, while STILL protecting the real vehicle from tick!
+        mvc.perform(post("/api/v1/ops/api/vehicles/connect-dummy")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"vehicleId\":\"" + unlinkedCar.id + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.vehicles[0].linked").value(true))
+                .andExpect(jsonPath("$.state.vehicles[0].dummy").value(false));
+
+        // 4. Vehicle creates guest invite; Ops Console joins as guest and sends readiness
+        var guestCreated = pickupService.createPickup(new PickupApi.Place("강남역 2번 출구", 37.4979, 127.0276), carAuth);
+        String guestLink = "https://majung.cloud/#join/" + guestCreated.pickupId() + "/" + guestCreated.inviteToken();
+        mvc.perform(post("/api/v1/ops/api/guest-join")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"link\":\"" + guestLink + "\",\"displayName\":\"테스트 손님\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/ops/api/pickups/passenger-action")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pickupId\":\"" + guestCreated.pickupId() + "\",\"readiness\":\"PREPARING\",\"quickMessage\":\"금방 갑니다\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participant.displayName").value("테스트 손님"))
+                .andExpect(jsonPath("$.participant.readiness").value("PREPARING"));
+
+        // Real vehicle MUST still be protected against operator vehicleTick
+        mvc.perform(post("/api/v1/ops/api/pickups/tick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pickupId\":\"" + guestCreated.pickupId() + "\",\"action\":\"arrive\"}"))
+                .andExpect(status().isForbidden());
+
+        // 5. Resetting dummy data removes the dummy link cleanly WITHOUT deleting the real emulator vehicle
+        mvc.perform(post("/api/v1/ops/api/dummy/reset")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"withSamplePickups\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vehicles[0].vehicleId").value(unlinkedCar.id.toString()))
+                .andExpect(jsonPath("$.vehicles[0].linked").value(false));
+
+        assertTrue(vehicles.findById(unlinkedCar.id).isPresent());
+        assertTrue(tokens.matches(unlinkedRawToken, vehicles.findById(unlinkedCar.id).orElseThrow().credentialHash));
     }
 }

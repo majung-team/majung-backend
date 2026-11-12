@@ -12,6 +12,7 @@
   ];
 
   const TARGET_STORAGE_KEY = 'majung.ops.selectedTargetId';
+  const VEHICLE_STORAGE_KEY = 'majung.ops.selectedVehicleId';
   const TAB_STORAGE_KEY = 'majung.ops.selectedTab';
   let csrfToken = null;
   let lastState = null;
@@ -76,7 +77,7 @@
   }
 
   function switchTab(name) {
-    const targetName = ['passenger', 'driver', 'manage'].includes(name) ? name : 'passenger';
+    const targetName = ['driver', 'passenger', 'manage'].includes(name) ? name : 'driver';
     sessionStorage.setItem(TAB_STORAGE_KEY, targetName);
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tab === targetName);
@@ -176,33 +177,51 @@
     return state?.members?.find((x) => x.memberId === selectedId) || null;
   }
 
+  function selectedVehicle(state) {
+    const selectedId = $('active-vehicle-select').value;
+    return state?.vehicles?.find((v) => v.vehicleId === selectedId) || null;
+  }
+
   function updateTargetVehicleStatus(state) {
     const pill = $('target-vehicle-pill');
-    const driverBanner = $('driver-mode-status');
     const m = selectedMember(state);
     if (!m) {
-      pill.textContent = '계정 미선택';
+      pill.textContent = '실회원 없음';
       pill.className = 'badge badge-slate';
-      driverBanner.textContent = '상단에서 테스트할 계정을 선택해주세요.';
-      driverBanner.className = 'role-notice compact-gap';
-      return;
-    }
-    if (m.driver) {
+    } else if (m.driver) {
       pill.textContent = `연결 차량: ${m.vehicleName || '등록됨'}`;
       pill.className = 'badge badge-green';
-      driverBanner.textContent = `연결 차량: ${m.vehicleName || '등록된 차량'} — 아래 작업으로 에뮬레이터 차량용 앱에 더미 요청 또는 지인 연결을 즉시 생성할 수 있습니다.`;
-      driverBanner.className = 'role-notice ok compact-gap';
     } else {
       pill.textContent = '차량 미연결';
       pill.className = 'badge badge-orange';
-      driverBanner.textContent = '선택한 계정에 연결된 차량이 없습니다. iPhone 앱 설정 > 차량 QR 연결에서 에뮬레이터 QR을 먼저 등록하세요.';
-      driverBanner.className = 'role-notice warn compact-gap';
+    }
+
+    const vPill = $('vehicle-link-pill');
+    const driverBanner = $('driver-mode-status');
+    const v = selectedVehicle(state);
+    if (!v) {
+      vPill.textContent = '차량 없음';
+      vPill.className = 'badge badge-slate';
+      driverBanner.textContent = '등록된 차량이 없습니다. 위 버튼으로 43자리 기기 등록 코드를 발급해 차량용 앱에 등록하거나 차량 코드로 찾아보세요.';
+      driverBanner.className = 'role-notice compact-gap';
+      return;
+    }
+    if (v.linked) {
+      vPill.textContent = `연결됨 · ${v.linkedMemberNickname || v.linkedMemberMajungId || '운전자'}`;
+      vPill.className = 'badge badge-green';
+      driverBanner.textContent = `${v.displayName} (${v.vehicleCode}) — 연결 운전자: ${v.linkedMemberNickname} (${v.linkedMemberMajungId}). 아래에서 다른 사용자 마중 요청·지인 연결·게스트 참여를 바로 테스트할 수 있습니다.`;
+      driverBanner.className = 'role-notice ok compact-gap';
+    } else {
+      vPill.textContent = `미연결 · ${v.vehicleCode}`;
+      vPill.className = 'badge badge-blue';
+      driverBanner.textContent = `${v.displayName} (${v.vehicleCode}) — 운전자 계정 미연결 상태입니다. 아래에서 "다른 사용자로 마중 요청 보내기"나 "차량 QR 연결 대행", "게스트 참여 대행"을 바로 실행할 수 있습니다.`;
+      driverBanner.className = 'role-notice ok compact-gap';
     }
   }
 
   function renderTargetBar(state) {
     const select = $('active-target-select');
-    const members = state.members;
+    const members = state.members || [];
     const prev = select.value || sessionStorage.getItem(TARGET_STORAGE_KEY);
     select.textContent = '';
     for (const m of members) {
@@ -218,6 +237,47 @@
       if (firstReal) select.value = firstReal.memberId;
     }
     if (select.value) sessionStorage.setItem(TARGET_STORAGE_KEY, select.value);
+
+    const vSelect = $('active-vehicle-select');
+    const vehicles = state.vehicles || [];
+    const prevVeh = vSelect.value || sessionStorage.getItem(VEHICLE_STORAGE_KEY);
+    vSelect.textContent = '';
+    for (const v of vehicles) {
+      const opt = document.createElement('option');
+      opt.value = v.vehicleId;
+      const roleTag = v.dummy ? '[더미 차량]' : '[차량 앱]';
+      const linkTag = v.linked ? `연결: ${v.linkedMemberNickname || v.linkedMemberMajungId}` : '미연결';
+      opt.textContent = `${roleTag} ${v.displayName} · ${v.vehicleCode} (${linkTag})`;
+      vSelect.append(opt);
+    }
+    if (prevVeh && vehicles.some((v) => v.vehicleId === prevVeh)) {
+      vSelect.value = prevVeh;
+    } else if (vehicles.length > 0) {
+      vSelect.value = vehicles[0].vehicleId;
+    }
+    if (vSelect.value) sessionStorage.setItem(VEHICLE_STORAGE_KEY, vSelect.value);
+
+    const dummies = members.filter((m) => m.dummy);
+    const passengerSelect = $('driver-passenger-select');
+    const prevPassenger = passengerSelect.value;
+    passengerSelect.textContent = '';
+    const autoOpt = document.createElement('option');
+    autoOpt.value = '';
+    autoOpt.textContent = '자동 선택 (여유 더미 탑승자)';
+    passengerSelect.append(autoOpt);
+    for (const d of [...dummies].sort((a, b) => Number(a.driver) - Number(b.driver))) {
+      const opt = document.createElement('option');
+      opt.value = d.memberId;
+      opt.textContent = `${d.driver ? '[운전자 더미]' : '[탑승자 더미]'} ${d.nickname} (${d.majungId})`;
+      passengerSelect.append(opt);
+    }
+    if (prevPassenger && [...passengerSelect.options].some((o) => o.value === prevPassenger)) {
+      passengerSelect.value = prevPassenger;
+    }
+
+    const claimSelect = $('claim-qr-member-select');
+    fillSelectKeepingValue(claimSelect, dummies, (m) => `${m.nickname} (${m.majungId})`);
+
     updateTargetVehicleStatus(state);
 
     const envBadge = $('env-badge');
@@ -225,6 +285,7 @@
     envBadge.className = `badge ${state.deployment ? 'badge-red' : 'badge-blue'}`;
     $('slot-badge').textContent = `slot: ${state.slot || 'standalone'}`;
 
+    $('kpi-real-vehicles').textContent = String(state.stats.realVehicles ?? 0);
     $('kpi-real').textContent = String(state.stats.realMembers);
     $('kpi-dummy').textContent = String(state.stats.dummyMembers);
     $('kpi-pickups').textContent = String(state.stats.openPickups);
@@ -284,18 +345,18 @@
   }
 
   function appendDummyPassengerControls(actions, p) {
-    if (!p.dummyPassenger || !['ACTIVE', 'ARRIVED'].includes(p.status)) return;
+    if ((!p.dummyPassenger && !p.guestControllable) || !['ACTIVE', 'ARRIVED'].includes(p.status)) return;
     actions.append(actionBtn('준비 상태: 지금 출발', 'btn-secondary', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'PREPARING' });
-      showBanner('더미 탑승자 상태를 "지금 출발해요"로 변경했습니다.');
+      showBanner('상대방(탑승자/게스트) 상태를 "지금 출발해요"로 변경했습니다.');
     }));
     actions.append(actionBtn('준비 상태: 탑승 준비 완료', 'btn-success', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'READY' });
-      showBanner('더미 탑승자 상태를 "준비 완료"로 변경했습니다.');
+      showBanner('상대방(탑승자/게스트) 상태를 "준비 완료"로 변경했습니다.');
     }));
     actions.append(actionBtn('빠른 메시지: 지금 내려가요', 'btn-secondary', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, quickMessage: '지금 내려가요' });
-      showBanner('더미 탑승자가 "지금 내려가요" 메시지를 보냈습니다.');
+      showBanner('상대방이 "지금 내려가요" 메시지를 보냈습니다.');
     }));
     actions.append(actionBtn('다른 장소 제안', 'btn-primary', async () => {
       const selected = parseSelectedPlace($('driver-place-select'));
@@ -303,7 +364,7 @@
         ? { label: '판교역 2번 출구', latitude: 37.3947, longitude: 127.1112 }
         : { label: selected.placeLabel, latitude: selected.latitude, longitude: selected.longitude };
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, proposePlace: alt });
-      showBanner(`더미 탑승자가 "${alt.label}"로 장소 변경을 제안했습니다.`);
+      showBanner(`상대방이 "${alt.label}"로 장소 변경을 제안했습니다.`);
     }));
   }
 
@@ -321,7 +382,7 @@
     title.textContent = `${p.placeLabel} · ${p.vehicleName}`;
     titleRow.append(title);
     if (!p.controllable) {
-      titleRow.append(makeBadge(p.dummyPassenger ? '내 차량 (에뮬레이터 운전)' : '실차량 (보호됨)', 'badge-slate'));
+      titleRow.append(makeBadge((p.dummyPassenger || p.guestControllable) ? '내 차량 (상대방 콘솔 제어)' : '실차량 (보호됨)', 'badge-slate'));
     }
 
     const sub = document.createElement('div');
@@ -467,17 +528,20 @@
       }
     }
 
-    // Tab 2 (Driver/Emulator role): pickups with a dummy passenger
+    // Tab 1 (Driver/Vehicle-first role): live pickups belonging to selectedVehicle
     const driverPickupsEl = $('driver-mode-pickups');
     driverPickupsEl.textContent = '';
-    const dummyPassengerLive = liveOnly.filter((p) => p.dummyPassenger);
-    if (!dummyPassengerLive.length) {
+    const v = selectedVehicle(state);
+    const vehicleLive = liveOnly.filter((p) => v && p.vehicleId === v.vehicleId);
+    if (!vehicleLive.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = '내 차량에서 진행 중인 더미 탑승자 픽업이 아직 없습니다. 에뮬레이터에서 요청을 수락·출발시키면 여기에 나타납니다.';
+      p.textContent = v
+        ? `${v.displayName} (${v.vehicleCode}) 에서 진행 중인 픽업이 아직 없습니다. 위에서 요청을 보내거나 차량 앱에서 수락·출발시키면 여기에 나타납니다.`
+        : '선택한 차량이 없습니다.';
       driverPickupsEl.append(p);
     } else {
-      for (const p of dummyPassengerLive) {
+      for (const p of vehicleLive) {
         driverPickupsEl.append(buildPickupCard(p, true, 'driver-only'));
       }
     }
@@ -499,18 +563,22 @@
 
   function renderRequests(state) {
     const requests = state.requests;
-    const target = selectedMember(state);
+    const v = selectedVehicle(state);
 
-    // Tab 2 (Driver/Emulator role): open requests & invitations where driverId === target
+    // Tab 1 (Driver/Vehicle-first role): open requests & invitations matching selectedVehicle
     const driverReqsEl = $('driver-mode-requests');
     driverReqsEl.textContent = '';
-    const driverOpen = requests.filter((r) =>
-      target && r.driverId === target.memberId && ['PENDING', 'INVITED', 'QUEUED'].includes(r.status)
-    );
+    const driverOpen = requests.filter((r) => {
+      if (!v || !['PENDING', 'INVITED', 'QUEUED'].includes(r.status)) return false;
+      if (r.vehicleId === v.vehicleId) return true;
+      return Boolean(v.linkedMemberId && r.driverId === v.linkedMemberId && !r.vehicleId);
+    });
     if (!driverOpen.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = '내 차량으로 들어온 대기 요청이나 발송 초대가 없습니다. 위에서 "더미 탑승자 마중 요청 전송"을 실행하세요.';
+      p.textContent = v
+        ? `${v.displayName} (${v.vehicleCode}) 으로 들어온 대기 요청이나 발송 초대가 없습니다. 위에서 "다른 사용자로 마중 요청 보내기"를 실행하세요.`
+        : '선택한 차량이 없습니다.';
       driverReqsEl.append(p);
     } else {
       for (const r of driverOpen) {
@@ -656,7 +724,7 @@
   async function boot() {
     populatePlaceSelect($('driver-place-select'));
     populatePlaceSelect($('inv-place-select'));
-    switchTab(sessionStorage.getItem(TAB_STORAGE_KEY) || 'passenger');
+    switchTab(sessionStorage.getItem(TAB_STORAGE_KEY) || 'driver');
 
     const session = await api('/api/v1/ops/api/session');
     if (session.authenticated) {
@@ -677,9 +745,48 @@
     sessionStorage.setItem(TARGET_STORAGE_KEY, ev.target.value);
     if (lastState) {
       updateTargetVehicleStatus(lastState);
+    }
+  });
+
+  $('active-vehicle-select').addEventListener('change', (ev) => {
+    sessionStorage.setItem(VEHICLE_STORAGE_KEY, ev.target.value);
+    if (lastState) {
+      updateTargetVehicleStatus(lastState);
       renderRequests(lastState);
       renderPickups(lastState);
     }
+  });
+
+  $('copy-vehicle-code-btn').addEventListener('click', () => {
+    const v = selectedVehicle(lastState);
+    if (v?.vehicleCode) copyText(v.vehicleCode, '차량 코드');
+  });
+
+  $('find-vehicle-code-btn').addEventListener('click', () => {
+    if (!lastState?.vehicles) return;
+    const raw = ($('vehicle-code-find-input').value || '').trim().toUpperCase();
+    const normalized = raw.startsWith('VEH-') ? raw : `VEH-${raw}`;
+    const found = lastState.vehicles.find((v) => (v.vehicleCode || '').toUpperCase() === normalized);
+    if (!found) {
+      showBanner(`차량 코드 "${normalized}"와 일치하는 차량을 찾을 수 없습니다.`, true);
+      return;
+    }
+    $('active-vehicle-select').value = found.vehicleId;
+    sessionStorage.setItem(VEHICLE_STORAGE_KEY, found.vehicleId);
+    updateTargetVehicleStatus(lastState);
+    renderRequests(lastState);
+    renderPickups(lastState);
+    showBanner(`${found.displayName} (${found.vehicleCode}) 차량을 선택했습니다.`);
+  });
+
+  $('driver-issue-reg-code-btn').addEventListener('click', async () => {
+    try {
+      const issued = await api('/api/v1/ops/api/vehicle-registration-codes', 'POST', {});
+      const out = $('driver-reg-code-output');
+      out.textContent = `기기 등록 코드: ${issued.code} (만료: ${issued.expiresAt})`;
+      out.classList.remove('hidden');
+      await copyText(issued.code, '차량 기기 등록 코드');
+    } catch (e) { showBanner(e.message, true); }
   });
 
   $('copy-target-id-btn').addEventListener('click', () => {
@@ -691,8 +798,76 @@
   $('q-live-pickup-btn').addEventListener('click', () => runQuick('start-live-pickup'));
   $('q-invite-btn').addEventListener('click', () => runQuick('send-invite'));
   $('q-friend-btn').addEventListener('click', () => runQuick('send-friend-request'));
-  $('q-dummy-req-my-car-btn').addEventListener('click', () => runQuick('dummy-request-my-vehicle', parseSelectedPlace($('driver-place-select'))));
-  $('q-connect-dummy-btn').addEventListener('click', () => runQuick('connect-dummy-passenger'));
+
+  $('q-dummy-req-my-car-btn').addEventListener('click', async () => {
+    const v = selectedVehicle(lastState);
+    if (!v) {
+      showBanner('먼저 상단에서 대상 차량을 선택해주세요.', true);
+      return;
+    }
+    const passengerId = $('driver-passenger-select').value || null;
+    const place = parseSelectedPlace($('driver-place-select'));
+    try {
+      const res = await api('/api/v1/ops/api/vehicles/request', 'POST', {
+        vehicleId: v.vehicleId,
+        passengerId,
+        ...place,
+      });
+      renderAll(res.state);
+      showBanner(res.message);
+    } catch (e) { showBanner(e.message, true); }
+  });
+
+  $('q-connect-dummy-btn').addEventListener('click', async () => {
+    const v = selectedVehicle(lastState);
+    if (!v) {
+      showBanner('먼저 상단에서 대상 차량을 선택해주세요.', true);
+      return;
+    }
+    const dummyId = $('driver-passenger-select').value || null;
+    try {
+      const res = await api('/api/v1/ops/api/vehicles/connect-dummy', 'POST', {
+        vehicleId: v.vehicleId,
+        dummyId,
+      });
+      renderAll(res.state);
+      showBanner(res.message);
+    } catch (e) { showBanner(e.message, true); }
+  });
+
+  $('claim-qr-btn').addEventListener('click', async () => {
+    const link = $('claim-qr-link-input').value.trim();
+    if (!link) {
+      showBanner('차량 앱에 표시된 QR 링크(#vehicle/...)를 붙여넣어 주세요.', true);
+      return;
+    }
+    try {
+      const res = await api('/api/v1/ops/api/vehicle-qr/claim', 'POST', {
+        link,
+        memberId: $('claim-qr-member-select').value || null,
+      });
+      $('claim-qr-link-input').value = '';
+      renderAll(res.state);
+      showBanner(res.message);
+    } catch (e) { showBanner(e.message, true); }
+  });
+
+  $('join-guest-btn').addEventListener('click', async () => {
+    const link = $('join-guest-link-input').value.trim();
+    if (!link) {
+      showBanner('차량 앱에서 만든 게스트 초대 링크(#join/...)를 붙여넣어 주세요.', true);
+      return;
+    }
+    try {
+      const res = await api('/api/v1/ops/api/guest-join', 'POST', {
+        link,
+        displayName: $('join-guest-name-input').value.trim() || null,
+      });
+      $('join-guest-link-input').value = '';
+      renderAll(res.state);
+      showBanner(res.message);
+    } catch (e) { showBanner(e.message, true); }
+  });
 
   $('login-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();

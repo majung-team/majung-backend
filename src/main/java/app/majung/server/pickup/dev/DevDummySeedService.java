@@ -2,6 +2,7 @@ package app.majung.server.pickup.dev;
 
 import app.majung.server.pickup.api.PickupApi;
 import app.majung.server.pickup.api.RideRequestApi;
+import app.majung.server.pickup.api.VehicleAccountApi;
 import app.majung.server.pickup.api.VehicleRegistrationApi;
 import app.majung.server.pickup.common.ApiException;
 import app.majung.server.pickup.common.DeploymentPolicy;
@@ -45,6 +46,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -141,10 +144,16 @@ public class DevDummySeedService {
     private final String adminKey;
     private final SecureRandom random = new SecureRandom();
 
+    private static final Pattern QR_LINK_PATTERN = Pattern.compile(
+            "(?:#vehicle/)?([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/([A-Za-z0-9_-]{43})");
+    private static final Pattern GUEST_LINK_PATTERN = Pattern.compile(
+            "(?:#join/)?([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/([A-Za-z0-9_-]{20,})");
+
     private final Map<UUID, String> vehicleTokens = new ConcurrentHashMap<>();
     private final Map<UUID, String> pickupOwnerTokens = new ConcurrentHashMap<>();
     private final Map<UUID, String> guestInviteTokens = new ConcurrentHashMap<>();
     private final Map<UUID, String> challengeCodes = new ConcurrentHashMap<>();
+    private final Set<UUID> opsJoinedGuestPickups = ConcurrentHashMap.newKeySet();
 
     public DevDummySeedService(
             DeploymentPolicy deploymentPolicy,
@@ -581,10 +590,179 @@ public class DevDummySeedService {
 
     public boolean isDummyVehicle(UUID vehicleId) {
         if (vehicleId == null) return false;
-        if (BUILTIN_DUMMY_VEHICLE_IDS.contains(vehicleId)) return true;
-        return links.findById(vehicleId)
-                .map(l -> DUMMY_PROVIDER.equals(l.member.provider))
+        if (BUILTIN_DUMMY_VEHICLE_IDS.contains(vehicleId) || vehicleTokens.containsKey(vehicleId)) return true;
+        return vehicles.findById(vehicleId)
+                .map(v -> tokens.matches(secretToken("veh-" + v.id), v.credentialHash))
                 .orElse(false);
+    }
+
+    public boolean isOpsGuestPickup(UUID pickupId) {
+        return pickupId != null && opsJoinedGuestPickups.contains(pickupId);
+    }
+
+    @Transactional
+    public String submitRideRequestToVehicleAsDummy(UUID vehicleId, String rawVehicleCode,
+                                                    UUID requestedDummyId, PickupApi.Place overridePlace) {
+        seedCatalogSafely();
+        RegisteredVehicle vehicle = resolveActiveVehicle(vehicleId, rawVehicleCode);
+        VehicleAccountLink currentLink = links.findById(vehicle.id).orElse(null);
+        UUID linkedDriverId = currentLink == null ? null : currentLink.member.id;
+        Member dummyPassenger = pickDummyPassengerForVehicle(vehicle.id, linkedDriverId, requestedDummyId);
+
+        List<PickupApi.Place> places = List.of(
+                new PickupApi.Place("강남역 2번 출구", 37.4979, 127.0276),
+                new PickupApi.Place("판교역 2번 출구", 37.3947, 127.1112),
+                new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516),
+                new PickupApi.Place("선릉역 1번 출구", 37.5045, 127.0489),
+                new PickupApi.Place("수원역 환승센터", 37.2660, 127.0005)
+        );
+        long reqCount = rideRequests.findByVehicleIdOrderByCreatedAtAscIdAsc(vehicle.id).stream()
+                .filter(this::isOpenRequest).count();
+        PickupApi.Place place = overridePlace != null ? overridePlace : places.get((int) (reqCount % places.size()));
+        rideRequestService.submit(dummyPassenger.id, new RideRequestApi.Submit(null, vehicle.id, place, UUID.randomUUID()));
+        return dummyPassenger.nickname + " (" + dummyPassenger.majungId + ") 님이 "
+                + vehicle.summaryDisplayName() + " (" + vehicle.vehicleCode + ") 차량에 '" + place.label() + "' 마중 요청을 보냈습니다.";
+    }
+
+    @Transactional
+    public String connectDummyToVehicleDriver(UUID vehicleId, String rawVehicleCode, UUID requestedDummyId) {
+        seedCatalogSafely();
+        RegisteredVehicle vehicle = resolveActiveVehicle(vehicleId, rawVehicleCode);
+        VehicleAccountLink currentLink = links.findById(vehicle.id).orElse(null);
+        if (currentLink == null) {
+            throw new ApiException(409, "VEHICLE_UNLINKED",
+                    "이 차량에는 아직 운전자 계정이 연결되지 않았습니다. 지인 목록 초대는 QR 연결 후 사용할 수 있으며, '마중 요청 보내기'는 미연결 상태에서도 바로 가능합니다.");
+        }
+        Member driver = currentLink.member;
+        Member dummy = requestedDummyId != null
+                ? requireDummyMember(requestedDummyId)
+                : pickUnconnectedDummyForMember(driver.id);
+        if (dummy.id.equals(driver.id)) {
+            throw new ApiException(400, "SELF_CONNECTION", "차량에 연결된 운전자 본인과는 지인 연결을 할 수 없어요.");
+        }
+        ensureConnection(dummy, driver, dummy, driver, "ACCEPTED");
+        return dummy.nickname + " (" + dummy.majungId + ") 님을 " + vehicle.summaryDisplayName()
+                + " 운전자(" + driver.nickname + ")의 지인으로 연결했습니다.";
+    }
+
+    @Transactional
+    public String claimVehicleQrAsDummy(String link, UUID rawChallengeId, String rawCode, UUID requestedDummyId) {
+        seedCatalogSafely();
+        UUID challengeId = rawChallengeId;
+        String code = rawCode == null ? null : rawCode.strip();
+        if ((challengeId == null || code == null || code.isEmpty()) && link != null && !link.isBlank()) {
+            Matcher matcher = QR_LINK_PATTERN.matcher(link.strip());
+            if (!matcher.find()) {
+                throw new ApiException(400, "INVALID_QR_LINK", "올바른 차량 QR 링크(#vehicle/<챌린지ID>/<코드>)를 붙여넣어 주세요.");
+            }
+            challengeId = UUID.fromString(matcher.group(1));
+            code = matcher.group(2);
+        }
+        if (challengeId == null || code == null || code.isEmpty()) {
+            throw new ApiException(400, "QR_LINK_REQUIRED", "차량 앱에 표시된 QR 링크를 붙여넣어 주세요.");
+        }
+        Member claimant = requestedDummyId != null
+                ? requireDummyMember(requestedDummyId)
+                : member(idx(0));
+        VehicleAccountApi.RequestView res = vehicleAccountService.claim(claimant.id, new VehicleAccountApi.Claim(challengeId, code));
+        return claimant.nickname + " (" + claimant.majungId + ") 계정이 " + res.vehicleName()
+                + " 차량에 연결 요청을 보냈습니다. 차량 화면에서 '연결 승인'을 눌러주세요.";
+    }
+
+    @Transactional
+    public String joinGuestPickupFromOps(String link, UUID rawPickupId, String rawInviteToken, String rawDisplayName) {
+        seedCatalogSafely();
+        UUID pickupId = rawPickupId;
+        String inviteToken = rawInviteToken == null ? null : rawInviteToken.strip();
+        if ((pickupId == null || inviteToken == null || inviteToken.isEmpty()) && link != null && !link.isBlank()) {
+            Matcher matcher = GUEST_LINK_PATTERN.matcher(link.strip());
+            if (!matcher.find()) {
+                throw new ApiException(400, "INVALID_INVITE_LINK", "올바른 게스트 초대 링크(#join/<픽업ID>/<토큰>)를 붙여넣어 주세요.");
+            }
+            pickupId = UUID.fromString(matcher.group(1));
+            inviteToken = matcher.group(2);
+        }
+        if (pickupId == null || inviteToken == null || inviteToken.isEmpty()) {
+            throw new ApiException(400, "INVITE_LINK_REQUIRED", "차량 앱에서 만든 게스트 초대 링크를 붙여넣어 주세요.");
+        }
+        String displayName = rawDisplayName == null || rawDisplayName.isBlank() ? "콘솔 게스트" : rawDisplayName.strip();
+        pickupService.joinPickup(pickupId, new PickupApi.JoinRequest(inviteToken, displayName));
+        opsJoinedGuestPickups.add(pickupId);
+        Pickup joined = pickups.findById(pickupId).orElseThrow();
+        return "'" + joined.participantName + "' 님이 게스트 초대에 참여했습니다. 아래 픽업 카드에서 준비 상태·메시지·장소 제안을 바로 보낼 수 있습니다.";
+    }
+
+    private RegisteredVehicle resolveActiveVehicle(UUID vehicleId, String rawVehicleCode) {
+        RegisteredVehicle v = null;
+        if (vehicleId != null) {
+            v = vehicles.findById(vehicleId).orElse(null);
+        } else if (rawVehicleCode != null && !rawVehicleCode.isBlank()) {
+            String normalized = VehicleCodeGenerator.normalizeLookupCode(rawVehicleCode);
+            if (normalized == null) {
+                throw new ApiException(400, "VEHICLE_CODE_INVALID", "차량 코드를 정확히 입력해주세요. (예: VEH-7K2M9A)");
+            }
+            v = vehicles.findByVehicleCode(normalized).orElse(null);
+        }
+        if (v == null || v.revokedAt != null) {
+            throw new ApiException(404, "VEHICLE_NOT_FOUND", "선택한 차량을 찾을 수 없어요.");
+        }
+        return v;
+    }
+
+    private Member requireDummyMember(UUID id) {
+        Member m = members.findById(id)
+                .orElseThrow(() -> new ApiException(404, "DUMMY_NOT_FOUND", "선택한 더미 계정을 찾을 수 없어요."));
+        if (!DUMMY_PROVIDER.equals(m.provider)) {
+            throw new ApiException(403, "REAL_MEMBER_PROTECTED", "실회원 계정 대신 더미 계정을 선택해주세요.");
+        }
+        return m;
+    }
+
+    private Member pickDummyPassengerForVehicle(UUID vehicleId, UUID linkedDriverId, UUID requestedDummyId) {
+        if (requestedDummyId != null) {
+            Member chosen = requireDummyMember(requestedDummyId);
+            if (chosen.id.equals(linkedDriverId)) {
+                throw new ApiException(400, "SELF_REQUEST", "차량에 연결된 운전자 본인 계정은 탑승자로 요청할 수 없어요.");
+            }
+            return chosen;
+        }
+        Set<UUID> busyPassengers = new HashSet<>();
+        for (RideRequest r : rideRequests.findByVehicleIdOrderByCreatedAtAscIdAsc(vehicleId)) {
+            if (isOpenRequest(r)) {
+                busyPassengers.add(r.passengerId);
+            }
+        }
+        if (linkedDriverId != null) {
+            for (RideRequest r : rideRequests.forMember(linkedDriverId)) {
+                if (Objects.equals(r.driverId, linkedDriverId) && isOpenRequest(r)) {
+                    busyPassengers.add(r.passengerId);
+                }
+            }
+        }
+        return DUMMY_SPECS.stream()
+                .filter(s -> !s.id().equals(DEMO_SELF_ID) && !s.id().equals(linkedDriverId))
+                .filter(s -> !busyPassengers.contains(s.id()))
+                .sorted(Comparator.comparingInt(s -> s.isDriver() ? 1 : 0))
+                .findFirst()
+                .map(s -> member(s.id()))
+                .orElseThrow(() -> new ApiException(409, "NO_FREE_PASSENGER",
+                        "이 차량에 보낼 수 있는 대기 더미 탑승자가 모두 사용 중입니다. 기존 요청을 처리하거나 초기화해주세요."));
+    }
+
+    private Member pickUnconnectedDummyForMember(UUID driverId) {
+        return DUMMY_SPECS.stream()
+                .filter(s -> !s.id().equals(DEMO_SELF_ID) && !s.id().equals(driverId))
+                .filter(s -> {
+                    UUID first = s.id().compareTo(driverId) < 0 ? s.id() : driverId;
+                    UUID second = first.equals(s.id()) ? driverId : s.id();
+                    return connections.findByFirstMemberAndSecondMember(first, second)
+                            .map(c -> !"ACCEPTED".equals(c.status))
+                            .orElse(true);
+                })
+                .sorted(Comparator.comparingInt(s -> s.isDriver() ? 1 : 0))
+                .findFirst()
+                .map(s -> member(s.id()))
+                .orElseThrow(() -> new ApiException(409, "ALL_CONNECTED", "모든 더미 탑승자가 이미 이 차량 운전자와 연결되어 있습니다."));
     }
 
     public GuestInviteInfo latestGuestInvite() {
@@ -837,7 +1015,7 @@ public class DevDummySeedService {
                                               PickupApi.Place proposePlace, boolean devAllowedOnRealParticipant) {
         Pickup pickup = pickups.findById(pickupId)
                 .orElseThrow(() -> new ApiException(404, "PICKUP_NOT_FOUND", "픽업을 찾을 수 없어요."));
-        if (!devAllowedOnRealParticipant) {
+        if (!devAllowedOnRealParticipant && !opsJoinedGuestPickups.contains(pickupId)) {
             List<RideRequest> linked = rideRequests.findAll().stream()
                     .filter(r -> pickupId.equals(r.pickupId))
                     .toList();
@@ -993,8 +1171,10 @@ public class DevDummySeedService {
         Set<UUID> dummyMemberSet = new HashSet<>(dummyMemberIds);
 
         Set<UUID> dummyVehicleSet = new HashSet<>(BUILTIN_DUMMY_VEHICLE_IDS);
-        for (UUID mid : dummyMemberIds) {
-            links.findByMemberIdOrderByLinkedAtDesc(mid).forEach(l -> dummyVehicleSet.add(l.vehicleId));
+        for (RegisteredVehicle v : vehicles.findAll()) {
+            if (isDummyVehicle(v.id)) {
+                dummyVehicleSet.add(v.id);
+            }
         }
 
         List<Pickup> dummyPickups = pickups.findAll().stream()
@@ -1025,10 +1205,17 @@ public class DevDummySeedService {
         pickups.deleteAll(dummyPickups);
         pickups.flush();
 
-        challenges.deleteAll(challenges.findAllById(dummyVehicleSet));
+        List<VehicleAccountChallenge> dummyChallenges = challenges.findAll().stream()
+                .filter(c -> dummyVehicleSet.contains(c.vehicleId)
+                        || (c.claimant != null && dummyMemberSet.contains(c.claimant.id)))
+                .toList();
+        challenges.deleteAll(dummyChallenges);
         challenges.flush();
 
-        links.deleteAll(links.findAllById(dummyVehicleSet));
+        List<VehicleAccountLink> dummyLinks = links.findAll().stream()
+                .filter(l -> dummyVehicleSet.contains(l.vehicleId) || dummyMemberSet.contains(l.member.id))
+                .toList();
+        links.deleteAll(dummyLinks);
         links.flush();
 
         vehicles.deleteAll(vehicles.findAllById(dummyVehicleSet));
@@ -1041,6 +1228,7 @@ public class DevDummySeedService {
         pickupOwnerTokens.clear();
         guestInviteTokens.clear();
         challengeCodes.clear();
+        opsJoinedGuestPickups.clear();
     }
 
     private RegisteredVehicle createVehicle(UUID id, String displayName, String defaultHint, Instant registeredAt) {
