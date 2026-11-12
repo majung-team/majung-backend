@@ -34,10 +34,3 @@ dependencies {
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
 tasks.test { useJUnitPlatform() }
-
-tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
-    if (System.getenv("SPRING_PROFILES_ACTIVE").isNullOrBlank()
-            && System.getProperty("spring.profiles.active").isNullOrBlank()) {
-        args("--spring.profiles.active=local")
-    }
-}

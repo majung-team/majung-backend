@@ -74,8 +74,7 @@ public class VehicleEnrollmentService {
         if (!member.id.equals(enrollment.claimantId) || !member.majungId.equals(expectedMajungId)) throw unavailable();
         RegisteredVehicle vehicle=new RegisteredVehicle();
         vehicle.id=enrollment.id; vehicle.credentialHash=enrollment.deviceHash;
-        vehicle.vehicleCode=VehicleCodeGenerator.nextUnique(vehicles);
-        vehicle.displayName="마중 차량"; vehicle.directRequestEnabled=true; vehicle.registeredAt=clock.instant();
+        vehicle.displayName="마중 차량"; vehicle.registeredAt=clock.instant();
         vehicles.saveAndFlush(vehicle);
         VehicleAccountLink link=new VehicleAccountLink();
         link.vehicleId=vehicle.id; link.member=member; link.linkedAt=clock.instant(); links.saveAndFlush(link);

@@ -54,9 +54,7 @@ public class VehicleRegistrationService {
         RegisteredVehicle vehicle = new RegisteredVehicle();
         vehicle.id = UUID.randomUUID();
         vehicle.credentialHash = tokenService.hash(credential);
-        vehicle.vehicleCode = VehicleCodeGenerator.nextUnique(registeredVehicleRepository);
         vehicle.displayName = request.displayName().strip();
-        vehicle.directRequestEnabled = true;
         vehicle.registeredAt = clock.instant();
         registeredVehicleRepository.save(vehicle);
         code.vehicleId = vehicle.id;
@@ -81,21 +79,8 @@ public class VehicleRegistrationService {
     }
 
     public VehicleRegistrationApi.VehicleInfo current(String authorization) {
-        return toView(requireActive(authorization));
-    }
-
-    public VehicleRegistrationApi.VehicleInfo updateProfile(String authorization, VehicleRegistrationApi.UpdateProfile update) {
         RegisteredVehicle vehicle = requireActive(authorization);
-        if (update.vehicleModel() != null) vehicle.vehicleModel = normalizeOptional(update.vehicleModel());
-        if (update.licensePlate() != null) vehicle.licensePlate = normalizeOptional(update.licensePlate());
-        if (update.ownerHint() != null) vehicle.ownerHint = normalizeOptional(update.ownerHint());
-        if (update.directRequestEnabled() != null) vehicle.directRequestEnabled = update.directRequestEnabled();
-        String summary = vehicle.summaryDisplayName();
-        if (summary != null && !summary.isBlank()) {
-            vehicle.displayName = summary.length() > 64 ? summary.substring(0, 64) : summary;
-        }
-        registeredVehicleRepository.saveAndFlush(vehicle);
-        return toView(vehicle);
+        return new VehicleRegistrationApi.VehicleInfo(vehicle.id, vehicle.displayName, vehicle.registeredAt, vehicle.revokedAt);
     }
 
     public VehicleRegistrationApi.VehicleInfo revoke(UUID id) {
@@ -114,25 +99,7 @@ public class VehicleRegistrationService {
                 }
             }
         }
-        return toView(vehicle);
-    }
-
-    private static String normalizeOptional(String value) {
-        String trimmed = value == null ? "" : value.strip();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static VehicleRegistrationApi.VehicleInfo toView(RegisteredVehicle vehicle) {
-        return new VehicleRegistrationApi.VehicleInfo(
-                vehicle.id,
-                vehicle.vehicleCode,
-                vehicle.summaryDisplayName(),
-                vehicle.vehicleModel,
-                vehicle.licensePlate,
-                vehicle.ownerHint,
-                vehicle.directRequestEnabled,
-                vehicle.registeredAt,
-                vehicle.revokedAt);
+        return new VehicleRegistrationApi.VehicleInfo(vehicle.id, vehicle.displayName, vehicle.registeredAt, vehicle.revokedAt);
     }
 
     private static ApiException unavailableCode() {

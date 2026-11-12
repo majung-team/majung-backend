@@ -117,9 +117,7 @@ public class VehicleAccountService {
         accounts.current(self);
         return links.findByMemberIdOrderByLinkedAtDesc(self).stream().map(link -> {
             RegisteredVehicle vehicle = registeredVehicleRepository.findById(link.vehicleId).orElseThrow(VehicleAccountService::notFound);
-            return vehicle.revokedAt == null ? new VehicleAccountApi.LinkView(
-                    vehicle.id, vehicle.summaryDisplayName(), link.linkedAt,
-                    vehicle.vehicleCode, vehicle.vehicleModel, vehicle.licensePlate, vehicle.ownerHint) : null;
+            return vehicle.revokedAt == null ? new VehicleAccountApi.LinkView(vehicle.id, vehicle.displayName, link.linkedAt) : null;
         }).filter(java.util.Objects::nonNull).toList();
     }
     public void cancel(UUID self, UUID id) {

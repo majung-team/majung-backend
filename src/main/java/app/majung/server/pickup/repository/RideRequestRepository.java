@@ -1,6 +1,12 @@
 package app.majung.server.pickup.repository;
 
+import app.majung.server.pickup.api.*;
+import app.majung.server.pickup.common.*;
 import app.majung.server.pickup.domain.*;
+import app.majung.server.pickup.job.*;
+import app.majung.server.pickup.push.*;
+import app.majung.server.pickup.security.*;
+import app.majung.server.pickup.service.*;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -9,7 +15,6 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface RideRequestRepository extends JpaRepository<RideRequest, UUID> {
     List<RideRequest> findByDriverIdOrderByCreatedAtAscIdAsc(UUID driverId);
-    List<RideRequest> findByVehicleIdOrderByCreatedAtAscIdAsc(UUID vehicleId);
     boolean existsByPickupId(UUID pickupId);
     @Query("select r from RideRequest r where r.passengerId = :self order by r.createdAt desc, r.id")
     List<RideRequest> passengerRequests(UUID self, Pageable page);
@@ -19,3 +24,4 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, UUID> 
     @Query("delete from RideRequest r where (r.pickupId is null and coalesce(r.endedAt, r.expiresAt) <= :cutoff) or (r.pickupId is not null and r.expiresAt <= :cutoff and not exists (select p.id from Pickup p where p.id = r.pickupId)) or exists (select p.id from Pickup p where p.id = r.pickupId and (p.endedAt <= :cutoff or (p.endedAt is null and p.expiresAt <= :cutoff)))")
     int deleteRetainedBefore(java.time.Instant cutoff);
 }
+
