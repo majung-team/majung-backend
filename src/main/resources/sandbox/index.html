@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>마중 비공개 테스트 콘솔 (Sandbox)</title>
+  <link rel="stylesheet" href="/sandbox/sandbox.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <span class="badge">로컬 전용 · 비공개</span>
+        <h1>마중 테스트 · 더미 데이터 콘솔</h1>
+        <p class="subtitle">혼자서 운전자·탑승자 양쪽 흐름을 테스트할 수 있는 로컬 전용 관리자 패널입니다.</p>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-secondary" href="/account" target="_blank" rel="noopener">마중 웹 열기</a>
+        <button class="btn btn-secondary" id="refresh-btn" type="button">새로고침</button>
+        <button class="btn btn-danger" id="reset-btn" type="button">더미 초기화</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="banner" class="banner hidden" role="status"></div>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>1. 현재 세션 · 더미 계정 전환</h2>
+          <p class="muted" id="session-status">현재 로그인 상태를 확인하는 중...</p>
+        </div>
+        <div class="inline-form">
+          <input id="inject-query" type="text" placeholder="내 마중 ID (예: MJ-...)" />
+          <button class="btn btn-primary" id="inject-btn" type="button">내 계정에 더미 채우기</button>
+        </div>
+      </div>
+      <div id="accounts-grid" class="accounts-grid"></div>
+    </section>
+
+    <section class="grid-two">
+      <section class="card">
+        <h2>2. 탑승자 대신 마중 요청 보내기</h2>
+        <div class="form-stack">
+          <label>탑승자
+            <select id="sim-passenger"></select>
+          </label>
+          <label>운전자 (차량 보유)
+            <select id="sim-driver"></select>
+          </label>
+          <label>만날 장소
+            <select id="sim-place">
+              <option value="강남역 2번 출구|37.4979|127.0276">강남역 2번 출구</option>
+              <option value="판교역 2번 출구|37.3947|127.1112">판교역 2번 출구</option>
+              <option value="광교중앙역 1번 출구|37.2886|127.0516">광교중앙역 1번 출구</option>
+              <option value="수원역 환승센터|37.2660|127.0005">수원역 환승센터</option>
+              <option value="야탑역 1번 출구|37.4114|127.1286">야탑역 1번 출구</option>
+              <option value="선릉역 1번 출구|37.5045|127.0489">선릉역 1번 출구</option>
+              <option value="홍대입구역 8번 출구|37.5572|126.9247">홍대입구역 8번 출구</option>
+            </select>
+          </label>
+          <button class="btn btn-primary" id="sim-request-btn" type="button">마중 요청 전송</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3. 비로그인 초대 · 차량 QR 링크</h2>
+        <div class="link-box">
+          <div class="row-between">
+            <strong>게스트 초대 링크 (#join)</strong>
+            <button class="btn btn-secondary btn-sm" id="new-invite-btn" type="button">새 초대 만들기</button>
+          </div>
+          <p class="mono" id="guest-invite-url">-</p>
+          <div class="row-actions">
+            <a class="btn btn-primary btn-sm" id="open-invite-link" href="/#" target="_blank" rel="noopener">새 탭에서 참여 확인</a>
+          </div>
+        </div>
+        <div class="link-box">
+          <div class="row-between">
+            <strong>차량 연결 QR 링크 (#vehicle)</strong>
+            <div class="row-actions">
+              <button class="btn btn-secondary btn-sm" id="new-qr-btn" type="button">QR 발급</button>
+              <button class="btn btn-primary btn-sm" id="confirm-qr-btn" type="button">차량에서 승인</button>
+            </div>
+          </div>
+          <p class="mono" id="vehicle-qr-url">-</p>
+          <p class="muted" id="vehicle-qr-meta"></p>
+        </div>
+      </section>
+    </section>
+
+    <section class="card">
+      <h2>4. 진행 중 픽업 제어 (차량 이동 · 준비 상태 · 퀵 메시지)</h2>
+      <div id="pickups-list" class="stack-list"></div>
+    </section>
+
+    <section class="card">
+      <h2>5. 마중 요청 및 초대 목록 (운전자/탑승자 대리 응답)</h2>
+      <div id="requests-list" class="stack-list"></div>
+    </section>
+  </main>
+
+  <script src="/sandbox/sandbox.js"></script>
+</body>
+</html>
