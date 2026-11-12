@@ -422,7 +422,7 @@ public class DevDummySeedService {
                         .filter(r -> r.passengerId.equals(target.id) && "ACTIVE".equals(r.status))
                         .findFirst().orElse(null);
                 if (activeAlready != null) {
-                    yield "이미 진행 중인 픽업이 있습니다. 아래 픽업 리모컨으로 차량을 이동·도착시켜 보세요.";
+                    yield "이미 진행 중인 픽업이 있습니다. 아래 픽업 제어 목록에서 차량을 이동·도착 처리하세요.";
                 }
                 RideRequest candidate = existing.stream()
                         .filter(r -> r.passengerId.equals(target.id)
@@ -431,7 +431,7 @@ public class DevDummySeedService {
                         .sorted(java.util.Comparator.comparing((RideRequest r) -> r.createdAt != null ? r.createdAt : Instant.EPOCH).reversed())
                         .findFirst()
                         .orElseThrow(() -> new ApiException(409, "NO_PENDING_REQUEST",
-                                "더미 운전자에게 보낸 대기 요청이 아직 없어요. 폰 앱에서 먼저 요청을 보내거나 '진행 중 픽업 바로 띄우기'를 눌러주세요."));
+                                "더미 운전자에게 보낸 대기 요청이 아직 없어요. 폰 앱에서 먼저 요청을 보내거나 '실시간 픽업 바로 생성'을 눌러주세요."));
                 if ("PENDING".equals(candidate.status)) {
                     driverAction(candidate.id, "accept");
                 }
@@ -456,7 +456,7 @@ public class DevDummySeedService {
                 boolean hasActive = existing.stream()
                         .anyMatch(r -> r.passengerId.equals(target.id) && "ACTIVE".equals(r.status));
                 if (hasActive) {
-                    yield "이미 진행 중인 픽업이 있습니다. 아래 차량 이동·도착 리모컨을 바로 누르실 수 있어요.";
+                    yield "이미 진행 중인 픽업이 있습니다. 아래 픽업 제어 목록에서 이동·도착을 바로 실행할 수 있습니다.";
                 }
                 DummyMemberSpec chosen = pickAvailableDummyDriver(target.id, existing);
                 PickupApi.Place place = overridePlace != null ? overridePlace : new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516);

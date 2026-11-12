@@ -190,12 +190,12 @@
     if (m.driver) {
       pill.textContent = `연결 차량: ${m.vehicleName || '등록됨'}`;
       pill.className = 'badge badge-green';
-      driverBanner.textContent = `✅ '${m.vehicleName || '등록된 차량'}' 차량이 연결돼 있습니다! 아래 버튼을 누르면 에뮬레이터 차량용 앱으로 즉시 요청·지인이 전송됩니다.`;
+      driverBanner.textContent = `연결 차량: ${m.vehicleName || '등록된 차량'} — 아래 작업으로 에뮬레이터 차량용 앱에 더미 요청 또는 지인 연결을 즉시 생성할 수 있습니다.`;
       driverBanner.className = 'role-notice ok compact-gap';
     } else {
       pill.textContent = '차량 미연결';
       pill.className = 'badge badge-orange';
-      driverBanner.textContent = '⚠️ 선택한 계정에 아직 연결된 차량이 없습니다. iPhone 앱 > 설정 > [QR 또는 링크로 차량 연결]로 에뮬레이터 차량 QR을 먼저 스캔하세요.';
+      driverBanner.textContent = '선택한 계정에 연결된 차량이 없습니다. iPhone 앱 설정 > 차량 QR 연결에서 에뮬레이터 QR을 먼저 등록하세요.';
       driverBanner.className = 'role-notice warn compact-gap';
     }
   }
@@ -240,11 +240,11 @@
     }
     if (p.status === 'ACTIVE') {
       const isAuto = autoDrivePickups.has(p.pickupId);
-      actions.append(actionBtn('🚗 한 칸 접근 (-60초)', 'btn-secondary', async () => {
+      actions.append(actionBtn('차량 접근 (-60초)', 'btn-secondary', async () => {
         await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'approach' });
         showBanner('차량을 한 단계 접근시켰습니다.');
       }));
-      actions.append(actionBtn(isAuto ? '⏹ 자동 주행 정지' : '▶ 자동 주행 (5초)', isAuto ? 'btn-danger' : 'btn-secondary', async () => {
+      actions.append(actionBtn(isAuto ? '자동 주행 중지' : '자동 주행 시작 (5초)', isAuto ? 'btn-danger' : 'btn-secondary', async () => {
         if (autoDrivePickups.has(p.pickupId)) {
           autoDrivePickups.delete(p.pickupId);
           showBanner('자동 주행을 멈췄습니다.');
@@ -253,24 +253,24 @@
           showBanner('5초 간격 자동 주행을 시작했습니다.');
         }
       }));
-      actions.append(actionBtn('📍 도착 알림 (ARRIVED)', 'btn-primary', async () => {
+      actions.append(actionBtn('도착 처리 (ARRIVED)', 'btn-primary', async () => {
         autoDrivePickups.delete(p.pickupId);
         await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'arrive' });
         showBanner('도착(ARRIVED) 처리 및 알림을 보냈습니다.');
       }));
       if (p.proposalLabel) {
-        actions.append(actionBtn('✨ 장소 제안 수락', 'btn-success', async () => {
+        actions.append(actionBtn('장소 제안 수락', 'btn-success', async () => {
           await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'accept-proposal' });
           showBanner('제안된 장소로 확정했습니다.');
         }));
       }
-      actions.append(actionBtn('👌 준비 수신확인', 'btn-secondary', async () => {
+      actions.append(actionBtn('준비 수신 확인', 'btn-secondary', async () => {
         await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'receive-readiness' });
         showBanner('탑승자 준비 수신확인을 반영했습니다.');
       }));
     }
     if (p.status === 'ACTIVE' || p.status === 'ARRIVED') {
-      actions.append(actionBtn('✅ 탑승 완료', 'btn-success', async () => {
+      actions.append(actionBtn('탑승 완료', 'btn-success', async () => {
         autoDrivePickups.delete(p.pickupId);
         await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'complete' });
         showBanner('픽업을 완료했습니다.');
@@ -285,19 +285,19 @@
 
   function appendDummyPassengerControls(actions, p) {
     if (!p.dummyPassenger || !['ACTIVE', 'ARRIVED'].includes(p.status)) return;
-    actions.append(actionBtn('🚶 더미 탑승자: 출발해요', 'btn-secondary', async () => {
+    actions.append(actionBtn('준비 상태: 지금 출발', 'btn-secondary', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'PREPARING' });
       showBanner('더미 탑승자 상태를 "지금 출발해요"로 변경했습니다.');
     }));
-    actions.append(actionBtn('🙋 더미 탑승자: 준비 완료', 'btn-success', async () => {
+    actions.append(actionBtn('준비 상태: 탑승 준비 완료', 'btn-success', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'READY' });
       showBanner('더미 탑승자 상태를 "준비 완료"로 변경했습니다.');
     }));
-    actions.append(actionBtn('💬 "지금 내려가요"', 'btn-secondary', async () => {
+    actions.append(actionBtn('빠른 메시지: 지금 내려가요', 'btn-secondary', async () => {
       await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, quickMessage: '지금 내려가요' });
       showBanner('더미 탑승자가 "지금 내려가요" 메시지를 보냈습니다.');
     }));
-    actions.append(actionBtn('📍 다른 장소 제안', 'btn-primary', async () => {
+    actions.append(actionBtn('다른 장소 제안', 'btn-primary', async () => {
       const selected = parseSelectedPlace($('driver-place-select'));
       const alt = selected.placeLabel === p.placeLabel
         ? { label: '판교역 2번 출구', latitude: 37.3947, longitude: 127.1112 }
@@ -414,11 +414,11 @@
     }
 
     if (r.dummyPassenger && r.status === 'INVITED') {
-      actions.append(actionBtn('👍 더미 탑승자: 초대 수락', 'btn-success', async () => {
+      actions.append(actionBtn('초대 수락 (더미)', 'btn-success', async () => {
         await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'accept-invite' });
         showBanner('더미 탑승자가 초대를 수락해 차량 대기열에 들어갔습니다.');
       }));
-      actions.append(actionBtn('👎 초대 거절', 'btn-danger', async () => {
+      actions.append(actionBtn('초대 거절 (더미)', 'btn-danger', async () => {
         await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'reject-invite' });
         showBanner('더미 탑승자가 초대를 거절했습니다.');
       }));
@@ -428,7 +428,7 @@
       if (!r.controllable) {
         actions.append(makeBadge('에뮬레이터에서 수락·출발 가능', 'badge-blue'));
       }
-      actions.append(actionBtn('❌ 더미 탑승자: 요청 취소', 'btn-danger', async () => {
+      actions.append(actionBtn('요청 취소 (더미)', 'btn-danger', async () => {
         await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'cancel' });
         showBanner('더미 탑승자가 보낸 요청을 취소했습니다.');
       }));
@@ -459,7 +459,7 @@
     if (!dummyVehicleLive.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = '아직 움직이는 더미 차량이 없습니다. 위에서 "🚘 더미 차량이 나한테 바로 픽업 시작" 또는 "⚡ 방금 폰에서 보낸 요청 수락·출발"을 눌러보세요.';
+      p.textContent = '진행 중인 더미 차량 픽업이 없습니다. 위에서 "실시간 픽업 바로 생성" 또는 "대기 요청 즉시 수락 · 출발"을 실행하세요.';
       passengerPickupsEl.append(p);
     } else {
       for (const p of dummyVehicleLive) {
@@ -510,7 +510,7 @@
     if (!driverOpen.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = '내 차량으로 들어온 대기 요청이나 내가 보낸 초대가 없습니다. 위에서 "🙋 더미 탑승자 → 내 차량에 마중 요청 보내기"를 눌러보세요.';
+      p.textContent = '내 차량으로 들어온 대기 요청이나 발송 초대가 없습니다. 위에서 "더미 탑승자 마중 요청 전송"을 실행하세요.';
       driverReqsEl.append(p);
     } else {
       for (const r of driverOpen) {
