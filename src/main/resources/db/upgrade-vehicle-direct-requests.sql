@@ -5,9 +5,15 @@ ALTER TABLE registered_vehicle ADD COLUMN IF NOT EXISTS license_plate VARCHAR(32
 ALTER TABLE registered_vehicle ADD COLUMN IF NOT EXISTS owner_hint VARCHAR(80);
 ALTER TABLE registered_vehicle ADD COLUMN IF NOT EXISTS direct_request_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 
-UPDATE registered_vehicle
-SET vehicle_code = 'VEH-' || upper(substr(replace(id::text, '-', ''), 1, 6))
-WHERE vehicle_code IS NULL;
+WITH ranked AS (
+    SELECT id, row_number() OVER (ORDER BY registered_at, id) AS rn
+    FROM registered_vehicle
+)
+UPDATE registered_vehicle v
+SET vehicle_code = 'VEH-' || upper(substr(md5(v.id::text || ':' || ranked.rn), 1, 8))
+FROM ranked
+WHERE v.id = ranked.id
+  AND v.vehicle_code IS NULL;
 
 ALTER TABLE registered_vehicle ALTER COLUMN vehicle_code SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS registered_vehicle_code_uidx ON registered_vehicle(vehicle_code);
