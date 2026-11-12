@@ -31,7 +31,8 @@ CANDIDATE_START_ATTEMPTS = 75
 
 WEB_FILES = {'privacy.html', 'index.html', 'style.css', 'app.js', 'api.js', 'model.js', 'map.js', 'push.js', 'proposal.js', 'stream.js', 'sw.js', 'manifest.webmanifest',
              'account.html', 'account.css', 'account.js', 'account-api.js',
-             'favicon.svg', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'}
+             'favicon.svg', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
+             '.well-known/apple-app-site-association'}
 
 
 def checked_payload(stream, digest, limit):
@@ -54,6 +55,9 @@ def unpack_web(data, destination):
             raise ValueError('Web artifact too large')
         for member in members:
             path = destination / member.name
+            if path.parent != destination:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.parent.chmod(0o755)
             path.write_bytes(archive.extractfile(member).read())
             path.chmod(0o644)
 

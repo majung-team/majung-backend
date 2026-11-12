@@ -45,6 +45,24 @@ class ReleaseTest(unittest.TestCase):
                 release.unpack_web(web_artifact(tarfile.TarInfo(name)), pathlib.Path(temporary))
                 self.assertTrue((pathlib.Path(temporary) / name).is_file())
 
+    def test_apple_app_site_association_is_allowed_web_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            payload = b'{"applinks":{"details":[]}}'
+            info = tarfile.TarInfo('.well-known/apple-app-site-association')
+            info.size = len(payload)
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode='w:gz') as archive:
+                for name in ['index.html', 'app.js', 'api.js', 'model.js', 'style.css']:
+                    data = b'fixture'
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    archive.addfile(member, io.BytesIO(data))
+                archive.addfile(info, io.BytesIO(payload))
+            release.unpack_web(output.getvalue(), pathlib.Path(temporary))
+            aasa = pathlib.Path(temporary) / '.well-known' / 'apple-app-site-association'
+            self.assertTrue(aasa.is_file())
+            self.assertEqual(aasa.read_bytes(), payload)
+
     def test_jar_must_contain_matching_built_revision(self):
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w') as archive:
