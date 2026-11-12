@@ -267,7 +267,7 @@ public class DevSandboxApi {
         if (body == null || body.pickupId() == null) {
             throw new ApiException(400, "INVALID_BODY", "픽업 식별자를 지정해주세요.");
         }
-        return seedService.passengerAction(body.pickupId(), body.readiness(), body.quickMessage(), body.proposePlace());
+        return seedService.passengerAction(body.pickupId(), body.readiness(), body.quickMessage(), body.proposePlace(), true);
     }
 
     @PostMapping("/api/v1/dev/simulate/guest-invite")
