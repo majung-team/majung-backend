@@ -320,6 +320,47 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   gap: 10px;
 }
 
+.role-notice {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #f8faff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.role-notice.ok {
+  border-color: #b7e4c7;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.role-notice.warn {
+  border-color: #f4d3a1;
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.inline-place-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-place-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline-place-label select {
+  min-width: 220px;
+}
+
 .item-meta {
   display: flex;
   flex-direction: column;

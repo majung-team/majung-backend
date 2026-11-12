@@ -241,6 +241,34 @@ class OpsConsoleTest {
                 .andExpect(jsonPath("$.participant.readiness").value("READY"))
                 .andExpect(jsonPath("$.quickMessage.text").value("지금 내려가요"));
 
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"connect-dummy-passenger\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        var realCarContacts = rideRequests.contacts(realCarAuth, 0);
+        assertFalse(realCarContacts.isEmpty());
+        UUID contactForInvite = realCarContacts.stream()
+                .filter(c -> !c.majungId().equals(received.get(0).majungId()))
+                .findFirst().orElseThrow().connectionId();
+        RideRequestApi.View driverInvite = rideRequests.invite(realCarAuth,
+                new RideRequestApi.Invite(contactForInvite, new PickupApi.Place("판교역 2번 출구", 37.3947, 127.1112), UUID.randomUUID()));
+
+        mvc.perform(post("/api/v1/ops/api/requests/passenger-action")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"" + driverInvite.requestId() + "\",\"action\":\"accept-invite\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("QUEUED"));
+
+        mvc.perform(post("/api/v1/ops/api/requests/passenger-action")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"" + submitted.requestId() + "\",\"action\":\"cancel\"}"))
+                .andExpect(status().isForbidden());
+
         mvc.perform(post("/api/v1/ops/api/pickups/tick")
                         .cookie(opsCookie).header("X-Ops-CSRF", csrf)
                         .contentType(MediaType.APPLICATION_JSON)

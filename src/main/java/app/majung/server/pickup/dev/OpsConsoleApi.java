@@ -50,9 +50,9 @@ public class OpsConsoleApi {
     public record OpsMemberItem(UUID memberId, String majungId, String nickname, boolean profileReady,
                                 boolean dummy, boolean driver, UUID vehicleId, String vehicleName, Instant createdAt) { }
 
-    public record OpsRequestItem(UUID requestId, String status, boolean controllable, UUID driverId,
-                                 String driverName, UUID passengerId, String passengerName, String placeLabel,
-                                 double placeLatitude, double placeLongitude, UUID pickupId,
+    public record OpsRequestItem(UUID requestId, String status, boolean controllable, boolean dummyPassenger,
+                                 UUID driverId, String driverName, UUID passengerId, String passengerName,
+                                 String placeLabel, double placeLatitude, double placeLongitude, UUID pickupId,
                                  boolean driverInvitation, Long queueOrder, Instant createdAt, Instant expiresAt) { }
 
     public record OpsPickupItem(UUID pickupId, String status, boolean controllable, boolean dummyPassenger,
@@ -96,7 +96,7 @@ public class OpsConsoleApi {
 
     public record ConfirmQrBody(UUID challengeId) { }
 
-    public record QuickActionBody(UUID targetMemberId, String kind) { }
+    public record QuickActionBody(UUID targetMemberId, String kind, String placeLabel, Double latitude, Double longitude) { }
 
     public record QuickActionResult(String message, OpsState state) { }
 
@@ -250,6 +250,15 @@ public class OpsConsoleApi {
         return seedService.driverAction(body.requestId(), body.action());
     }
 
+    @PostMapping("/api/v1/ops/api/requests/passenger-action")
+    public RideRequestApi.View passengerRequestAction(@RequestBody RequestActionBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null || body.requestId() == null || body.action() == null) {
+            throw new ApiException(400, "INVALID_BODY", "요청과 동작을 지정해주세요.");
+        }
+        return seedService.passengerRequestAction(body.requestId(), body.action());
+    }
+
     @PostMapping("/api/v1/ops/api/pickups/tick")
     public Object pickupTick(@RequestBody PickupTickBody body, HttpServletRequest request) {
         opsSession.requireAuthorized(request, true);
@@ -308,7 +317,11 @@ public class OpsConsoleApi {
         if (body == null || body.targetMemberId() == null || body.kind() == null || body.kind().isBlank()) {
             throw new ApiException(400, "INVALID_BODY", "대상 계정과 빠른 테스트 동작을 선택해주세요.");
         }
-        String message = seedService.quickAction(body.targetMemberId(), body.kind());
+        PickupApi.Place overridePlace = body.placeLabel() != null && !body.placeLabel().isBlank()
+                && body.latitude() != null && body.longitude() != null
+                ? new PickupApi.Place(body.placeLabel().strip(), body.latitude(), body.longitude())
+                : null;
+        String message = seedService.quickAction(body.targetMemberId(), body.kind(), overridePlace);
         return new QuickActionResult(message, buildState(request));
     }
 
@@ -348,8 +361,9 @@ public class OpsConsoleApi {
                     Member drv = memberMap.get(r.driverId);
                     Member pas = memberMap.get(r.passengerId);
                     boolean controllable = drv != null && DevDummySeedService.DUMMY_PROVIDER.equals(drv.provider);
+                    boolean dummyPassenger = pas != null && DevDummySeedService.DUMMY_PROVIDER.equals(pas.provider);
                     return new OpsRequestItem(
-                            r.id, r.status, controllable, r.driverId,
+                            r.id, r.status, controllable, dummyPassenger, r.driverId,
                             drv == null ? "-" : drv.nickname + " (" + drv.majungId + ")",
                             r.passengerId,
                             pas == null ? "-" : pas.nickname + " (" + pas.majungId + ")",

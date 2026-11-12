@@ -12,6 +12,7 @@
   ];
 
   const TARGET_STORAGE_KEY = 'majung.ops.selectedTargetId';
+  const TAB_STORAGE_KEY = 'majung.ops.selectedTab';
   let csrfToken = null;
   let lastState = null;
   const autoDrivePickups = new Set();
@@ -75,21 +76,27 @@
   }
 
   function switchTab(name) {
+    const targetName = ['passenger', 'driver', 'manage'].includes(name) ? name : 'passenger';
+    sessionStorage.setItem(TAB_STORAGE_KEY, targetName);
     document.querySelectorAll('.tab-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.tab === name);
+      btn.classList.toggle('active', btn.dataset.tab === targetName);
     });
     document.querySelectorAll('.tab-panel').forEach((panel) => {
-      panel.classList.toggle('hidden', panel.id !== `tab-${name}`);
+      panel.classList.toggle('hidden', panel.id !== `tab-${targetName}`);
     });
   }
 
   function populatePlaceSelect(selectEl) {
+    const prev = selectEl.value;
     selectEl.textContent = '';
     for (const p of PLACES) {
       const opt = document.createElement('option');
       opt.value = `${p.label}|${p.lat}|${p.lng}`;
       opt.textContent = p.label;
       selectEl.append(opt);
+    }
+    if (prev && [...selectEl.options].some((o) => o.value === prev)) {
+      selectEl.value = prev;
     }
   }
 
@@ -164,21 +171,32 @@
     }
   }
 
-  function updateTargetVehiclePill(state) {
-    const pill = $('target-vehicle-pill');
+  function selectedMember(state) {
     const selectedId = $('active-target-select').value;
-    const m = state?.members?.find((x) => x.memberId === selectedId);
+    return state?.members?.find((x) => x.memberId === selectedId) || null;
+  }
+
+  function updateTargetVehicleStatus(state) {
+    const pill = $('target-vehicle-pill');
+    const driverBanner = $('driver-mode-status');
+    const m = selectedMember(state);
     if (!m) {
-      pill.textContent = '차량 미선택';
+      pill.textContent = '계정 미선택';
       pill.className = 'badge badge-slate';
+      driverBanner.textContent = '상단에서 테스트할 계정을 선택해주세요.';
+      driverBanner.className = 'role-notice compact-gap';
       return;
     }
     if (m.driver) {
       pill.textContent = `연결 차량: ${m.vehicleName || '등록됨'}`;
       pill.className = 'badge badge-green';
+      driverBanner.textContent = `✅ '${m.vehicleName || '등록된 차량'}' 차량이 연결돼 있습니다! 아래 버튼을 누르면 에뮬레이터 차량용 앱으로 즉시 요청·지인이 전송됩니다.`;
+      driverBanner.className = 'role-notice ok compact-gap';
     } else {
-      pill.textContent = '연결 차량 없음';
-      pill.className = 'badge badge-slate';
+      pill.textContent = '차량 미연결';
+      pill.className = 'badge badge-orange';
+      driverBanner.textContent = '⚠️ 선택한 계정에 아직 연결된 차량이 없습니다. iPhone 앱 > 설정 > [QR 또는 링크로 차량 연결]로 에뮬레이터 차량 QR을 먼저 스캔하세요.';
+      driverBanner.className = 'role-notice warn compact-gap';
     }
   }
 
@@ -200,7 +218,7 @@
       if (firstReal) select.value = firstReal.memberId;
     }
     if (select.value) sessionStorage.setItem(TARGET_STORAGE_KEY, select.value);
-    updateTargetVehiclePill(state);
+    updateTargetVehicleStatus(state);
 
     const envBadge = $('env-badge');
     envBadge.textContent = state.deployment ? '운영 서버 (majung.cloud)' : '로컬 서버';
@@ -213,7 +231,83 @@
     $('kpi-requests').textContent = String(state.stats.openRequests);
   }
 
-  function buildPickupCard(p, compact) {
+  function appendVehicleControls(actions, p) {
+    if (p.status === 'WAITING_APPROVAL') {
+      actions.append(actionBtn('게스트 탑승 승인', 'btn-success', async () => {
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'approve-guest' });
+        showBanner('게스트 탑승을 승인했습니다.');
+      }));
+    }
+    if (p.status === 'ACTIVE') {
+      const isAuto = autoDrivePickups.has(p.pickupId);
+      actions.append(actionBtn('🚗 한 칸 접근 (-60초)', 'btn-secondary', async () => {
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'approach' });
+        showBanner('차량을 한 단계 접근시켰습니다.');
+      }));
+      actions.append(actionBtn(isAuto ? '⏹ 자동 주행 정지' : '▶ 자동 주행 (5초)', isAuto ? 'btn-danger' : 'btn-secondary', async () => {
+        if (autoDrivePickups.has(p.pickupId)) {
+          autoDrivePickups.delete(p.pickupId);
+          showBanner('자동 주행을 멈췄습니다.');
+        } else {
+          autoDrivePickups.add(p.pickupId);
+          showBanner('5초 간격 자동 주행을 시작했습니다.');
+        }
+      }));
+      actions.append(actionBtn('📍 도착 알림 (ARRIVED)', 'btn-primary', async () => {
+        autoDrivePickups.delete(p.pickupId);
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'arrive' });
+        showBanner('도착(ARRIVED) 처리 및 알림을 보냈습니다.');
+      }));
+      if (p.proposalLabel) {
+        actions.append(actionBtn('✨ 장소 제안 수락', 'btn-success', async () => {
+          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'accept-proposal' });
+          showBanner('제안된 장소로 확정했습니다.');
+        }));
+      }
+      actions.append(actionBtn('👌 준비 수신확인', 'btn-secondary', async () => {
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'receive-readiness' });
+        showBanner('탑승자 준비 수신확인을 반영했습니다.');
+      }));
+    }
+    if (p.status === 'ACTIVE' || p.status === 'ARRIVED') {
+      actions.append(actionBtn('✅ 탑승 완료', 'btn-success', async () => {
+        autoDrivePickups.delete(p.pickupId);
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'complete' });
+        showBanner('픽업을 완료했습니다.');
+      }));
+      actions.append(actionBtn('취소', 'btn-danger', async () => {
+        autoDrivePickups.delete(p.pickupId);
+        await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'cancel' });
+        showBanner('픽업을 취소했습니다.');
+      }));
+    }
+  }
+
+  function appendDummyPassengerControls(actions, p) {
+    if (!p.dummyPassenger || !['ACTIVE', 'ARRIVED'].includes(p.status)) return;
+    actions.append(actionBtn('🚶 더미 탑승자: 출발해요', 'btn-secondary', async () => {
+      await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'PREPARING' });
+      showBanner('더미 탑승자 상태를 "지금 출발해요"로 변경했습니다.');
+    }));
+    actions.append(actionBtn('🙋 더미 탑승자: 준비 완료', 'btn-success', async () => {
+      await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'READY' });
+      showBanner('더미 탑승자 상태를 "준비 완료"로 변경했습니다.');
+    }));
+    actions.append(actionBtn('💬 "지금 내려가요"', 'btn-secondary', async () => {
+      await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, quickMessage: '지금 내려가요' });
+      showBanner('더미 탑승자가 "지금 내려가요" 메시지를 보냈습니다.');
+    }));
+    actions.append(actionBtn('📍 다른 장소 제안', 'btn-primary', async () => {
+      const selected = parseSelectedPlace($('driver-place-select'));
+      const alt = selected.placeLabel === p.placeLabel
+        ? { label: '판교역 2번 출구', latitude: 37.3947, longitude: 127.1112 }
+        : { label: selected.placeLabel, latitude: selected.latitude, longitude: selected.longitude };
+      await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, proposePlace: alt });
+      showBanner(`더미 탑승자가 "${alt.label}"로 장소 변경을 제안했습니다.`);
+    }));
+  }
+
+  function buildPickupCard(p, compact, mode = 'all') {
     const card = document.createElement('div');
     card.className = compact ? 'remote-pickup-card' : 'item-row';
 
@@ -227,7 +321,7 @@
     title.textContent = `${p.placeLabel} · ${p.vehicleName}`;
     titleRow.append(title);
     if (!p.controllable) {
-      titleRow.append(makeBadge(p.dummyPassenger ? '내 차량 (직접 운전)' : '실차량 (보호됨)', 'badge-slate'));
+      titleRow.append(makeBadge(p.dummyPassenger ? '내 차량 (에뮬레이터 운전)' : '실차량 (보호됨)', 'badge-slate'));
     }
 
     const sub = document.createElement('div');
@@ -249,97 +343,146 @@
 
     const actions = document.createElement('div');
     actions.className = 'row-actions';
-    if (p.controllable) {
-      if (p.status === 'WAITING_APPROVAL') {
-        actions.append(actionBtn('게스트 탑승 승인', 'btn-success', async () => {
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'approve-guest' });
-          showBanner('게스트 탑승을 승인했습니다.');
-        }));
-      }
-      if (p.status === 'ACTIVE') {
-        const isAuto = autoDrivePickups.has(p.pickupId);
-        actions.append(actionBtn('🚗 한 칸 접근 (-60초)', 'btn-secondary', async () => {
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'approach' });
-          showBanner('차량을 한 단계 접근시켰습니다.');
-        }));
-        actions.append(actionBtn(isAuto ? '⏹ 자동 주행 정지' : '▶ 자동 주행 (5초)', isAuto ? 'btn-danger' : 'btn-secondary', async () => {
-          if (autoDrivePickups.has(p.pickupId)) {
-            autoDrivePickups.delete(p.pickupId);
-            showBanner('자동 주행을 멈췄습니다.');
-          } else {
-            autoDrivePickups.add(p.pickupId);
-            showBanner('5초 간격 자동 주행을 시작했습니다.');
-          }
-        }));
-        actions.append(actionBtn('📍 도착 알림 (ARRIVED)', 'btn-primary', async () => {
-          autoDrivePickups.delete(p.pickupId);
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'arrive' });
-          showBanner('도착(ARRIVED) 처리 및 알림을 보냈습니다.');
-        }));
-        if (p.proposalLabel) {
-          actions.append(actionBtn('✨ 장소 제안 수락', 'btn-success', async () => {
-            await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'accept-proposal' });
-            showBanner('제안된 장소로 확정했습니다.');
-          }));
-        }
-        actions.append(actionBtn('👌 준비 수신확인', 'btn-secondary', async () => {
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'receive-readiness' });
-          showBanner('탑승자 준비 수신확인을 반영했습니다.');
-        }));
-      }
-      if (p.status === 'ACTIVE' || p.status === 'ARRIVED') {
-        actions.append(actionBtn('✅ 탑승 완료', 'btn-success', async () => {
-          autoDrivePickups.delete(p.pickupId);
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'complete' });
-          showBanner('픽업을 완료했습니다.');
-        }));
-        actions.append(actionBtn('취소', 'btn-danger', async () => {
-          autoDrivePickups.delete(p.pickupId);
-          await api('/api/v1/ops/api/pickups/tick', 'POST', { pickupId: p.pickupId, action: 'cancel' });
-          showBanner('픽업을 취소했습니다.');
-        }));
-      }
+    if (mode !== 'driver-only' && p.controllable) {
+      appendVehicleControls(actions, p);
     }
-    if (p.dummyPassenger && (p.status === 'ACTIVE' || p.status === 'ARRIVED')) {
-      actions.append(actionBtn('🚶 더미 탑승자: 출발해요', 'btn-secondary', async () => {
-        await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'PREPARING' });
-        showBanner('더미 탑승자 상태를 "지금 출발해요"로 변경했습니다.');
-      }));
-      actions.append(actionBtn('🙋 더미 탑승자: 준비 완료', 'btn-success', async () => {
-        await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, readiness: 'READY' });
-        showBanner('더미 탑승자 상태를 "준비 완료"로 변경했습니다.');
-      }));
-      actions.append(actionBtn('💬 "지금 내려가요"', 'btn-secondary', async () => {
-        await api('/api/v1/ops/api/pickups/passenger-action', 'POST', { pickupId: p.pickupId, quickMessage: '지금 내려가요' });
-        showBanner('더미 탑승자가 "지금 내려가요" 메시지를 보냈습니다.');
-      }));
+    if (mode !== 'vehicle-only') {
+      appendDummyPassengerControls(actions, p);
     }
 
     card.append(meta, actions);
     return card;
   }
 
-  function renderPickups(pickups) {
+  function buildRequestRow(r, driverFocus = false) {
+    const row = document.createElement('div');
+    row.className = driverFocus ? 'remote-pickup-card' : 'item-row';
+
+    const meta = document.createElement('div');
+    meta.className = 'item-meta';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'item-title-row';
+    titleRow.append(makeBadge(r.status, statusBadgeClass(r.status)));
+    if (r.driverInvitation) titleRow.append(makeBadge('운전자 초대', 'badge-slate'));
+    const title = document.createElement('strong');
+    title.textContent = `${r.passengerName} → ${r.driverName}`;
+    titleRow.append(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'muted';
+    const q = r.queueOrder != null ? ` · 대기순서 #${r.queueOrder}` : '';
+    sub.textContent = `장소: ${r.placeLabel}${q}`;
+    meta.append(titleRow, sub);
+
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+
+    if (r.controllable && !driverFocus) {
+      if (r.status === 'PENDING') {
+        actions.append(actionBtn('수락', 'btn-primary', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'accept' });
+          showBanner('요청을 수락했습니다.');
+        }));
+        actions.append(actionBtn('거절', 'btn-danger', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'reject' });
+          showBanner('요청을 거절했습니다.');
+        }));
+      }
+      if (r.status === 'QUEUED') {
+        actions.append(actionBtn('운행 시작', 'btn-success', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'start' });
+          showBanner('운행을 시작했습니다.');
+        }));
+      }
+      if (r.status === 'ACTIVE') {
+        actions.append(actionBtn('도착', 'btn-primary', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'arrive' });
+          showBanner('도착 상태로 전환했습니다.');
+        }));
+        actions.append(actionBtn('완료', 'btn-success', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'complete' });
+          showBanner('완료 처리했습니다.');
+        }));
+      }
+      if (r.driverInvitation && ['INVITED', 'QUEUED'].includes(r.status)) {
+        actions.append(actionBtn('초대 취소', 'btn-danger', async () => {
+          await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'cancel' });
+          showBanner('초대를 취소했습니다.');
+        }));
+      }
+    }
+
+    if (r.dummyPassenger && r.status === 'INVITED') {
+      actions.append(actionBtn('👍 더미 탑승자: 초대 수락', 'btn-success', async () => {
+        await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'accept-invite' });
+        showBanner('더미 탑승자가 초대를 수락해 차량 대기열에 들어갔습니다.');
+      }));
+      actions.append(actionBtn('👎 초대 거절', 'btn-danger', async () => {
+        await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'reject-invite' });
+        showBanner('더미 탑승자가 초대를 거절했습니다.');
+      }));
+    }
+
+    if (r.dummyPassenger && ['PENDING', 'QUEUED'].includes(r.status)) {
+      if (!r.controllable) {
+        actions.append(makeBadge('에뮬레이터에서 수락·출발 가능', 'badge-blue'));
+      }
+      actions.append(actionBtn('❌ 더미 탑승자: 요청 취소', 'btn-danger', async () => {
+        await api('/api/v1/ops/api/requests/passenger-action', 'POST', { requestId: r.requestId, action: 'cancel' });
+        showBanner('더미 탑승자가 보낸 요청을 취소했습니다.');
+      }));
+    }
+
+    if (!r.controllable && !r.dummyPassenger) {
+      actions.append(makeBadge('실회원 보호', 'badge-slate'));
+    }
+
+    row.append(meta, actions);
+    return row;
+  }
+
+  function renderPickups(state) {
+    const pickups = state.pickups;
     for (const activeId of [...autoDrivePickups]) {
       if (!pickups.some((p) => p.pickupId === activeId && p.status === 'ACTIVE')) {
         autoDrivePickups.delete(activeId);
       }
     }
 
-    const remoteContainer = $('remote-pickups-list');
-    remoteContainer.textContent = '';
     const liveOnly = pickups.filter((p) => !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(p.status));
-    if (!liveOnly.length) {
+
+    // Tab 1 (Passenger role): dummy vehicles driving to my phone
+    const passengerPickupsEl = $('passenger-mode-pickups');
+    passengerPickupsEl.textContent = '';
+    const dummyVehicleLive = liveOnly.filter((p) => p.controllable);
+    if (!dummyVehicleLive.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = '아직 진행 중인 픽업이 없습니다. 위에서 "🚘 진행 중 픽업 바로 띄우기" 또는 "⚡ 방금 보낸 요청 바로 수락·출발"을 눌러보세요.';
-      remoteContainer.append(p);
+      p.textContent = '아직 움직이는 더미 차량이 없습니다. 위에서 "🚘 더미 차량이 나한테 바로 픽업 시작" 또는 "⚡ 방금 폰에서 보낸 요청 수락·출발"을 눌러보세요.';
+      passengerPickupsEl.append(p);
     } else {
-      for (const p of liveOnly) {
-        remoteContainer.append(buildPickupCard(p, true));
+      for (const p of dummyVehicleLive) {
+        passengerPickupsEl.append(buildPickupCard(p, true, 'vehicle-only'));
       }
     }
 
+    // Tab 2 (Driver/Emulator role): pickups with a dummy passenger
+    const driverPickupsEl = $('driver-mode-pickups');
+    driverPickupsEl.textContent = '';
+    const dummyPassengerLive = liveOnly.filter((p) => p.dummyPassenger);
+    if (!dummyPassengerLive.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = '내 차량에서 진행 중인 더미 탑승자 픽업이 아직 없습니다. 에뮬레이터에서 요청을 수락·출발시키면 여기에 나타납니다.';
+      driverPickupsEl.append(p);
+    } else {
+      for (const p of dummyPassengerLive) {
+        driverPickupsEl.append(buildPickupCard(p, true, 'driver-only'));
+      }
+    }
+
+    // Tab 3 (All pickups)
     const list = $('pickups-list');
     list.textContent = '';
     if (!pickups.length) {
@@ -349,12 +492,33 @@
       list.append(p);
     } else {
       for (const p of pickups) {
-        list.append(buildPickupCard(p, false));
+        list.append(buildPickupCard(p, false, 'all'));
       }
     }
   }
 
-  function renderRequests(requests) {
+  function renderRequests(state) {
+    const requests = state.requests;
+    const target = selectedMember(state);
+
+    // Tab 2 (Driver/Emulator role): open requests & invitations where driverId === target
+    const driverReqsEl = $('driver-mode-requests');
+    driverReqsEl.textContent = '';
+    const driverOpen = requests.filter((r) =>
+      target && r.driverId === target.memberId && ['PENDING', 'INVITED', 'QUEUED'].includes(r.status)
+    );
+    if (!driverOpen.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = '내 차량으로 들어온 대기 요청이나 내가 보낸 초대가 없습니다. 위에서 "🙋 더미 탑승자 → 내 차량에 마중 요청 보내기"를 눌러보세요.';
+      driverReqsEl.append(p);
+    } else {
+      for (const r of driverOpen) {
+        driverReqsEl.append(buildRequestRow(r, true));
+      }
+    }
+
+    // Tab 3 (All requests)
     const list = $('requests-list');
     list.textContent = '';
     const filter = $('request-filter').value;
@@ -366,69 +530,8 @@
       list.append(p);
       return;
     }
-
     for (const r of visible) {
-      const row = document.createElement('div');
-      row.className = 'item-row';
-
-      const meta = document.createElement('div');
-      meta.className = 'item-meta';
-
-      const titleRow = document.createElement('div');
-      titleRow.className = 'item-title-row';
-      titleRow.append(makeBadge(r.status, statusBadgeClass(r.status)));
-      if (r.driverInvitation) titleRow.append(makeBadge('운전자 초대', 'badge-slate'));
-      const title = document.createElement('strong');
-      title.textContent = `${r.passengerName} → ${r.driverName}`;
-      titleRow.append(title);
-
-      const sub = document.createElement('div');
-      sub.className = 'muted';
-      const q = r.queueOrder != null ? ` · 대기순서 #${r.queueOrder}` : '';
-      sub.textContent = `장소: ${r.placeLabel}${q}`;
-      meta.append(titleRow, sub);
-
-      const actions = document.createElement('div');
-      actions.className = 'row-actions';
-      if (r.controllable) {
-        if (r.status === 'PENDING') {
-          actions.append(actionBtn('수락', 'btn-primary', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'accept' });
-            showBanner('요청을 수락했습니다.');
-          }));
-          actions.append(actionBtn('거절', 'btn-danger', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'reject' });
-            showBanner('요청을 거절했습니다.');
-          }));
-        }
-        if (r.status === 'QUEUED') {
-          actions.append(actionBtn('운행 시작', 'btn-success', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'start' });
-            showBanner('운행을 시작했습니다.');
-          }));
-        }
-        if (r.status === 'ACTIVE') {
-          actions.append(actionBtn('도착', 'btn-primary', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'arrive' });
-            showBanner('도착 상태로 전환했습니다.');
-          }));
-          actions.append(actionBtn('완료', 'btn-success', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'complete' });
-            showBanner('완료 처리했습니다.');
-          }));
-        }
-        if (r.driverInvitation && ['INVITED', 'QUEUED'].includes(r.status)) {
-          actions.append(actionBtn('초대 취소', 'btn-danger', async () => {
-            await api('/api/v1/ops/api/requests/action', 'POST', { requestId: r.requestId, action: 'cancel' });
-            showBanner('초대를 취소했습니다.');
-          }));
-        }
-      } else {
-        actions.append(makeBadge('실운전자', 'badge-slate'));
-      }
-
-      row.append(meta, actions);
-      list.append(row);
+      list.append(buildRequestRow(r, false));
     }
   }
 
@@ -496,14 +599,14 @@
       const titleRow = document.createElement('div');
       titleRow.className = 'item-title-row';
       titleRow.append(makeBadge(m.dummy ? '더미' : '실회원', m.dummy ? 'badge-slate' : 'badge-blue'));
-      if (m.driver) titleRow.append(makeBadge('운전자', 'badge-green'));
+      if (m.driver) titleRow.append(makeBadge('차량 연결됨', 'badge-green'));
       const strong = document.createElement('strong');
       strong.textContent = `${m.nickname} (${m.majungId})`;
       titleRow.append(strong);
 
       const sub = document.createElement('div');
       sub.className = 'muted';
-      sub.textContent = m.vehicleName || '차량 미연결 탑승자';
+      sub.textContent = m.vehicleName || '차량 미연결 계정';
       meta.append(titleRow, sub);
 
       const actions = document.createElement('div');
@@ -518,23 +621,28 @@
   function renderAll(state) {
     lastState = state;
     renderTargetBar(state);
-    renderPickups(state.pickups);
-    renderRequests(state.requests);
+    renderPickups(state);
+    renderRequests(state);
     renderLinks(state);
     renderAdvanced(state.members);
   }
 
   async function loadState() {
-    renderAll(await api('/api/v1/ops/api/state'));
+    const state = await api('/api/v1/ops/api/state');
+    renderAll(state);
   }
 
-  async function runQuick(kind) {
+  async function runQuick(kind, place = null) {
     const targetMemberId = $('active-target-select').value;
     if (!targetMemberId) {
-      return showBanner('먼저 위에서 내 폰 계정을 선택해주세요.', true);
+      showBanner('상단에서 대상 계정을 먼저 선택해주세요.', true);
+      return;
     }
     try {
-      const res = await api('/api/v1/ops/api/quick', 'POST', { targetMemberId, kind });
+      const payload = place
+        ? { targetMemberId, kind, ...place }
+        : { targetMemberId, kind };
+      const res = await api('/api/v1/ops/api/quick', 'POST', payload);
       renderAll(res.state);
       showBanner(res.message);
     } catch (e) {
@@ -543,7 +651,10 @@
   }
 
   async function boot() {
+    populatePlaceSelect($('driver-place-select'));
     populatePlaceSelect($('inv-place-select'));
+    switchTab(sessionStorage.getItem(TAB_STORAGE_KEY) || 'passenger');
+
     const session = await api('/api/v1/ops/api/session');
     if (session.authenticated) {
       showApp(session);
@@ -561,11 +672,15 @@
 
   $('active-target-select').addEventListener('change', (ev) => {
     sessionStorage.setItem(TARGET_STORAGE_KEY, ev.target.value);
-    updateTargetVehiclePill(lastState);
+    if (lastState) {
+      updateTargetVehicleStatus(lastState);
+      renderRequests(lastState);
+      renderPickups(lastState);
+    }
   });
 
   $('copy-target-id-btn').addEventListener('click', () => {
-    const m = lastState?.members?.find((x) => x.memberId === $('active-target-select').value);
+    const m = selectedMember(lastState);
     if (m) copyText(m.majungId, '내 마중 ID');
   });
 
@@ -573,7 +688,8 @@
   $('q-live-pickup-btn').addEventListener('click', () => runQuick('start-live-pickup'));
   $('q-invite-btn').addEventListener('click', () => runQuick('send-invite'));
   $('q-friend-btn').addEventListener('click', () => runQuick('send-friend-request'));
-  $('q-dummy-req-my-car-btn').addEventListener('click', () => runQuick('dummy-request-my-vehicle'));
+  $('q-dummy-req-my-car-btn').addEventListener('click', () => runQuick('dummy-request-my-vehicle', parseSelectedPlace($('driver-place-select'))));
+  $('q-connect-dummy-btn').addEventListener('click', () => runQuick('connect-dummy-passenger'));
 
   $('login-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -713,7 +829,7 @@
     } catch (e) { showBanner(e.message, true); }
   });
 
-  $('request-filter').addEventListener('change', () => lastState && renderRequests(lastState.requests));
+  $('request-filter').addEventListener('change', () => lastState && renderRequests(lastState));
   $('member-search-input').addEventListener('input', () => lastState && renderAdvanced(lastState.members));
   $('member-role-filter').addEventListener('change', () => lastState && renderAdvanced(lastState.members));
 

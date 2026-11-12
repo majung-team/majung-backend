@@ -10,8 +10,8 @@
   <section id="login-view" class="login-shell hidden">
     <div class="login-card">
       <div class="brand-badge">MAJUNG OPS</div>
-      <h1>마중 관리자 로그인</h1>
-      <p class="muted">실서버(<code>majung.cloud</code>)와 내 iPhone 앱을 혼자 편하게 테스트하는 비공개 리모컨입니다. 한 번 로그인하면 같은 브라우저에서 7일간 유지됩니다.</p>
+      <h1>마중 1인 테스트 리모컨 로그인</h1>
+      <p class="muted">실서버(<code>majung.cloud</code>)와 내 휴대폰·차량용 앱(에뮬레이터)을 혼자 테스트하는 비공개 리모컨입니다. 로그인은 같은 브라우저에서 7일간 유지됩니다.</p>
       <form id="login-form" class="form-stack">
         <label>관리자 키 (<code>MAJUNG_ADMIN_KEY</code>)
           <input id="admin-key-input" type="password" autocomplete="off" placeholder="키를 붙여넣으세요" required />
@@ -55,7 +55,7 @@
       <section class="target-bar">
         <div class="target-bar-main">
           <div>
-            <span class="target-label">지금 조종할 내 폰 계정</span>
+            <span class="target-label">테스트할 내 카카오 계정 (실회원 자동 선택)</span>
             <div class="target-row">
               <select id="active-target-select"></select>
               <button class="btn btn-secondary btn-sm" id="copy-target-id-btn" type="button">내 마중ID 복사</button>
@@ -72,52 +72,85 @@
       </section>
 
       <nav class="tab-bar" role="tablist">
-        <button class="tab-btn active" type="button" data-tab="remote">리모컨 (쉽게 테스트)</button>
-        <button class="tab-btn" type="button" data-tab="activity">전체 요청 · 픽업 목록</button>
-        <button class="tab-btn" type="button" data-tab="advanced">더미 목록 · 고급 설정</button>
+        <button class="tab-btn active" type="button" data-tab="passenger">📱 휴대폰 앱 테스트 (내가 탑승자)</button>
+        <button class="tab-btn" type="button" data-tab="driver">🚘 차량용 앱·에뮬레이터 테스트 (내가 운전자)</button>
+        <button class="tab-btn" type="button" data-tab="manage">🧰 게스트 · QR · 전체 관리</button>
       </nav>
 
-      <!-- TAB 1: EASY REMOTE CONTROL -->
-      <section id="tab-remote" class="tab-panel">
+      <!-- TAB 1: PHONE APP (PASSENGER ROLE) -->
+      <section id="tab-passenger" class="tab-panel">
         <div class="card card-accent">
-          <h2>1단계 · 내 폰에 바로 상황 만들기</h2>
-          <p class="muted">아래 버튼 중 하나만 누르면 선택한 계정의 iPhone 앱 화면이 바로 바뀝니다.</p>
+          <h2>1단계 · 더미 운전자가 내 휴대폰으로 상황 보내기</h2>
+          <p class="muted">내 iPhone 마중 앱에서 운전자 역할을 서버 더미가 대신합니다. 버튼 하나만 누르면 폰 화면이 바뀝니다.</p>
           <div class="quick-grid">
             <button class="quick-btn quick-primary" id="q-auto-start-btn" type="button">
-              <strong>⚡ 방금 보낸 요청 바로 수락·출발</strong>
-              <span>폰에서 더미 운전자에게 요청 보낸 뒤 누르세요</span>
+              <strong>⚡ 방금 폰에서 보낸 요청 수락·출발</strong>
+              <span>폰 앱에서 더미 운전자에게 요청을 보낸 뒤 누르세요</span>
             </button>
             <button class="quick-btn" id="q-live-pickup-btn" type="button">
-              <strong>🚘 진행 중 픽업 바로 띄우기</strong>
-              <span>곧바로 차량 이동·도착을 시험할 때</span>
+              <strong>🚘 더미 차량이 나한테 바로 픽업 시작</strong>
+              <span>곧바로 차량 이동·도착 알림을 시험할 때</span>
             </button>
             <button class="quick-btn" id="q-invite-btn" type="button">
-              <strong>📩 운전자 초대 하나 받기</strong>
-              <span>누를 때마다 다른 운전자가 초대를 보냅니다</span>
+              <strong>📩 더미 운전자가 나한테 초대 보내기</strong>
+              <span>내 요청·초대 탭에 새 운전자 초대를 띄웁니다</span>
             </button>
             <button class="quick-btn" id="q-friend-btn" type="button">
-              <strong>👋 지인 연결 요청 받기</strong>
-              <span>사람 탭에서 수락·거절 흐름을 테스트할 때</span>
-            </button>
-            <button class="quick-btn" id="q-dummy-req-my-car-btn" type="button">
-              <strong>🚕 더미 탑승자 → 내 연결 차량으로 요청</strong>
-              <span>내 계정에 연결된 차량으로 더미가 지인연결 + 마중요청</span>
+              <strong>👋 더미가 나한테 지인 요청 보내기</strong>
+              <span>사람 탭에서 지인 수락·거절 흐름을 테스트할 때</span>
             </button>
           </div>
         </div>
 
         <div class="card">
-          <div class="section-head">
-            <div>
-              <h2>2단계 · 지금 움직이는 픽업 조종</h2>
-              <p class="muted">차량을 접근시키거나 도착 알림을 띄워 내 폰 화면 변화를 바로 확인하세요.</p>
-            </div>
+          <h2>2단계 · 내 폰으로 오는 더미 차량 조종</h2>
+          <p class="muted">접근시키거나 도착(ARRIVED) 처리해 내 휴대폰 화면과 도착 알림 배너를 확인하세요.</p>
+          <div id="passenger-mode-pickups" class="stack-list"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: VEHICLE / EMULATOR APP (DRIVER ROLE) -->
+      <section id="tab-driver" class="tab-panel hidden">
+        <div class="card card-accent">
+          <h2>1단계 · 내 차량(에뮬레이터)으로 더미 탑승자 연결 · 요청</h2>
+          <p class="muted">내 계정에 연결된 차량 앱(에뮬레이터)에서 탑승자 역할을 서버 더미가 대신합니다.</p>
+          <div id="driver-mode-status" class="role-notice compact-gap"></div>
+
+          <div class="inline-place-row compact-gap">
+            <label class="inline-place-label">요청·제안 장소
+              <select id="driver-place-select"></select>
+            </label>
           </div>
-          <div id="remote-pickups-list" class="stack-list"></div>
+
+          <div class="quick-grid">
+            <button class="quick-btn quick-primary" id="q-dummy-req-my-car-btn" type="button">
+              <strong>🙋 더미 탑승자 → 내 차량에 마중 요청 보내기</strong>
+              <span>지인 연결 후 에뮬레이터 화면으로 마중 요청을 보냅니다</span>
+            </button>
+            <button class="quick-btn" id="q-connect-dummy-btn" type="button">
+              <strong>👥 더미 탑승자 1명 내 지인으로 연결</strong>
+              <span>에뮬레이터 '초대할 지인' 목록에 더미를 추가합니다</span>
+            </button>
+          </div>
         </div>
 
         <div class="card">
-          <h2>3단계 · 비로그인 게스트 &amp; 차량 QR 원클릭</h2>
+          <h2>2단계 · 내 차량의 대기 요청 · 내가 보낸 초대 응답</h2>
+          <p class="muted">에뮬레이터에서 더미에게 초대를 보냈다면 아래에서 더미가 수락·거절하게 할 수 있습니다.</p>
+          <div id="driver-mode-requests" class="stack-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>3단계 · 에뮬레이터 픽업 중 더미 탑승자 반응</h2>
+          <p class="muted">에뮬레이터에서 픽업을 시작하면 더미 탑승자의 준비 상태·빠른 메시지·장소 제안을 보낼 수 있습니다.</p>
+          <div id="driver-mode-pickups" class="stack-list"></div>
+        </div>
+      </section>
+
+      <!-- TAB 3: GUEST / QR / ALL MANAGEMENT -->
+      <section id="tab-manage" class="tab-panel hidden">
+        <div class="card">
+          <h2>비로그인 게스트 &amp; 전시용 차량 QR</h2>
           <div class="grid-two">
             <div class="link-box">
               <div class="row-between">
@@ -133,7 +166,7 @@
 
             <div class="link-box">
               <div class="row-between">
-                <strong>차량 연결 QR (#vehicle)</strong>
+                <strong>테스트 차량 연결 QR (#vehicle)</strong>
                 <button class="btn btn-secondary btn-sm" id="new-qr-btn" type="button">QR 새로 발급</button>
               </div>
               <p class="mono" id="vehicle-qr-url">-</p>
@@ -145,15 +178,12 @@
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- TAB 2: ALL REQUESTS & PICKUPS -->
-      <section id="tab-activity" class="tab-panel hidden">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>마중 요청 및 초대 대기열</h2>
-              <p class="muted">대기 중인 요청을 개별적으로 수락·거절·출발시킬 수 있습니다.</p>
+              <h2>전체 요청 대기열</h2>
+              <p class="muted">모든 더미·실회원 요청 상태를 한눈에 보고 수동 제어합니다.</p>
             </div>
             <div class="row-actions">
               <select id="request-filter">
@@ -170,14 +200,11 @@
           <h2>전체 픽업 상세 목록</h2>
           <div id="pickups-list" class="stack-list"></div>
         </div>
-      </section>
 
-      <!-- TAB 3: DUMMY DIRECTORY & ADVANCED -->
-      <section id="tab-advanced" class="tab-panel hidden">
         <div class="grid-two">
           <section class="card">
             <h2>더미 · 회원 계정 디렉토리</h2>
-            <p class="muted"><code>ID 복사</code>를 눌러 iPhone <code>사람</code> 탭에서 검색하세요.</p>
+            <p class="muted"><code>ID 복사</code>를 눌러 앱의 <code>사람</code> 탭에서 검색하세요.</p>
             <div class="filter-bar compact-gap">
               <input id="member-search-input" type="search" placeholder="이름 또는 마중 ID 검색..." />
               <select id="member-role-filter">

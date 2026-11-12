@@ -406,6 +406,11 @@ public class DevDummySeedService {
 
     @Transactional
     public String quickAction(UUID targetId, String kind) {
+        return quickAction(targetId, kind, null);
+    }
+
+    @Transactional
+    public String quickAction(UUID targetId, String kind, PickupApi.Place overridePlace) {
         seedCatalogSafely();
         Member target = members.findById(targetId)
                 .orElseThrow(() -> new ApiException(404, "MEMBER_NOT_FOUND", "대상 회원을 찾을 수 없어요."));
@@ -443,7 +448,7 @@ public class DevDummySeedService {
                         new PickupApi.Place("정자역 3번 출구", 37.3670, 127.1081)
                 );
                 long inviteCount = existing.stream().filter(r -> "INVITED".equals(r.status)).count();
-                PickupApi.Place place = places.get((int) (inviteCount % places.size()));
+                PickupApi.Place place = overridePlace != null ? overridePlace : places.get((int) (inviteCount % places.size()));
                 sendDriverInvitation(chosen.id(), target.id, place);
                 yield chosen.nickname() + " 운전자가 '" + place.label() + "' 초대를 보냈습니다.";
             }
@@ -454,7 +459,7 @@ public class DevDummySeedService {
                     yield "이미 진행 중인 픽업이 있습니다. 아래 차량 이동·도착 리모컨을 바로 누르실 수 있어요.";
                 }
                 DummyMemberSpec chosen = pickAvailableDummyDriver(target.id, existing);
-                PickupApi.Place place = new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516);
+                PickupApi.Place place = overridePlace != null ? overridePlace : new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516);
                 ensureConnection(member(chosen.id()), target, member(chosen.id()), target, "ACCEPTED");
                 Pickup active = createLivePickup(chosen.vehicleId(), target.nickname, place,
                         37.2820, 127.0460, 240L, Pickup.Readiness.PREPARING, "지금 1번 출구 쪽으로 가고 있어요!");
@@ -467,7 +472,7 @@ public class DevDummySeedService {
                         vehicles.findById(l.vehicleId).map(v -> v.revokedAt == null).orElse(false));
                 if (!hasVehicle) {
                     throw new ApiException(409, "DRIVER_VEHICLE_REQUIRED",
-                            "먼저 내 계정에 차량을 연결해주세요 (차량 앱 로그인 후 QR 연결 또는 '차량 연결 QR' 사용).");
+                            "먼저 내 계정에 차량을 연결해주세요 (iPhone 앱 > 설정 > 차량 QR 연결로 에뮬레이터 QR 스캔).");
                 }
                 DummyMemberSpec dummy = pickAvailableDummyPassengerForDriver(target.id, existing);
                 Member dummyMember = member(dummy.id());
@@ -480,9 +485,26 @@ public class DevDummySeedService {
                         new PickupApi.Place("수원역 환승센터", 37.2660, 127.0005)
                 );
                 long reqCount = existing.stream().filter(r -> r.driverId.equals(target.id) && isOpenRequest(r)).count();
-                PickupApi.Place place = places.get((int) (reqCount % places.size()));
+                PickupApi.Place place = overridePlace != null ? overridePlace : places.get((int) (reqCount % places.size()));
                 rideRequestService.submit(dummyMember.id, new RideRequestApi.Submit(target.id, place, UUID.randomUUID()));
                 yield dummyMember.nickname + " (" + dummyMember.majungId + ") 더미 탑승자가 내 차량으로 '" + place.label() + "' 마중 요청을 보냈습니다.";
+            }
+            case "connect-dummy-passenger" -> {
+                DummyMemberSpec dummy = DUMMY_SPECS.stream()
+                        .filter(s -> !s.id().equals(DEMO_SELF_ID) && !s.id().equals(target.id))
+                        .filter(s -> {
+                            UUID first = s.id().compareTo(target.id) < 0 ? s.id() : target.id;
+                            UUID second = first.equals(s.id()) ? target.id : s.id();
+                            return connections.findByFirstMemberAndSecondMember(first, second)
+                                    .map(c -> !"ACCEPTED".equals(c.status))
+                                    .orElse(true);
+                        })
+                        .sorted(Comparator.comparingInt(s -> s.isDriver() ? 1 : 0))
+                        .findFirst()
+                        .orElseThrow(() -> new ApiException(409, "ALL_CONNECTED", "모든 더미 탑승자가 이미 내 계정과 연결되어 있습니다."));
+                Member dummyMember = member(dummy.id());
+                ensureConnection(dummyMember, target, dummyMember, target, "ACCEPTED");
+                yield dummyMember.nickname + " (" + dummyMember.majungId + ") 더미 탑승자와 지인 연결을 완료했습니다.";
             }
             case "send-friend-request" -> {
                 Member dummy = members.findAll().stream()
@@ -711,6 +733,23 @@ public class DevDummySeedService {
                 yield rideRequestService.cancel(req.passengerId, requestId);
             }
             default -> throw new ApiException(400, "INVALID_ACTION", "지원하지 않는 동작이에요.");
+        };
+    }
+
+    @Transactional
+    public RideRequestApi.View passengerRequestAction(UUID requestId, String action) {
+        RideRequest req = rideRequests.findById(requestId)
+                .orElseThrow(() -> new ApiException(404, "RIDE_REQUEST_NOT_FOUND", "마중 요청을 찾을 수 없어요."));
+        Member passenger = members.findById(req.passengerId)
+                .orElseThrow(() -> new ApiException(404, "PASSENGER_NOT_FOUND", "탑승자를 찾을 수 없어요."));
+        if (!DUMMY_PROVIDER.equals(passenger.provider)) {
+            throw new ApiException(403, "REAL_PASSENGER_PROTECTED", "실제 탑승자 계정의 요청이나 초대는 관리자 콘솔에서 대리 조작할 수 없어요.");
+        }
+        return switch (action) {
+            case "accept-invite" -> rideRequestService.answerInvitation(passenger.id, requestId, true);
+            case "reject-invite" -> rideRequestService.answerInvitation(passenger.id, requestId, false);
+            case "cancel" -> rideRequestService.cancel(passenger.id, requestId);
+            default -> throw new ApiException(400, "INVALID_ACTION", "지원하지 않는 탑승자 요청 동작이에요.");
         };
     }
 
