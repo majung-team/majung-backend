@@ -48,7 +48,8 @@ public class OpsConsoleApi {
     public record OpsLoginBody(String adminKey) { }
 
     public record OpsMemberItem(UUID memberId, String majungId, String nickname, boolean profileReady,
-                                boolean dummy, boolean driver, UUID vehicleId, String vehicleName, Instant createdAt) { }
+                                boolean dummy, boolean driver, UUID vehicleId, String vehicleName,
+                                String vehicleCode, Instant createdAt) { }
 
     public record OpsRequestItem(UUID requestId, String status, boolean controllable, boolean dummyPassenger,
                                  UUID driverId, String driverName, UUID passengerId, String passengerName,
@@ -65,8 +66,8 @@ public class OpsConsoleApi {
 
     public record OpsGuestInvite(UUID pickupId, String inviteToken, String link, String placeLabel, Instant expiresAt) { }
 
-    public record OpsVehicleQr(UUID challengeId, UUID vehicleId, String vehicleName, String code,
-                               String link, Instant expiresAt, String claimantMajungId) { }
+    public record OpsVehicleQr(UUID challengeId, UUID vehicleId, String vehicleName, String vehicleCode,
+                               String code, String link, Instant expiresAt, String claimantMajungId) { }
 
     public record OpsStats(long totalMembers, long realMembers, long dummyMembers, long linkedVehicles,
                            long openPickups, long openRequests) { }
@@ -202,7 +203,8 @@ public class OpsConsoleApi {
         VehicleAccountLink link = links.findByMemberIdOrderByLinkedAtDesc(created.id).stream().findFirst().orElse(null);
         RegisteredVehicle v = link == null ? null : vehicles.findById(link.vehicleId).orElse(null);
         return new OpsMemberItem(created.id, created.majungId, created.nickname, created.profileReady, true,
-                v != null, v == null ? null : v.id, v == null ? null : v.displayName, created.createdAt);
+                v != null, v == null ? null : v.id, v == null ? null : v.displayName,
+                v == null ? null : v.vehicleCode, created.createdAt);
     }
 
     @PostMapping("/api/v1/ops/api/users/inject")
@@ -292,7 +294,8 @@ public class OpsConsoleApi {
     public OpsVehicleQr createVehicleQr(HttpServletRequest request) {
         opsSession.requireAuthorized(request, true);
         DevDummySeedService.VehicleChallengeInfo qr = seedService.createOrRefreshVehicleQr();
-        return toQrView(qr, request);
+        RegisteredVehicle v = vehicles.findById(qr.vehicleId()).orElse(null);
+        return toQrView(qr, v == null ? Map.of() : Map.of(v.id, v), request);
     }
 
     @PostMapping("/api/v1/ops/api/vehicle-qr/confirm")
@@ -347,6 +350,7 @@ public class OpsConsoleApi {
                             v != null,
                             v == null ? null : v.id,
                             v == null ? null : v.displayName,
+                            v == null ? null : v.vehicleCode,
                             m.createdAt
                     );
                 })
@@ -419,7 +423,7 @@ public class OpsConsoleApi {
                 reqItems,
                 pickupItems,
                 toGuestView(seedService.latestGuestInvite(), request),
-                toQrView(seedService.currentVehicleQr(), request)
+                toQrView(seedService.currentVehicleQr(), vehicleMap, request)
         );
     }
 
@@ -456,11 +460,14 @@ public class OpsConsoleApi {
         return new OpsGuestInvite(info.pickupId(), info.inviteToken(), link, info.placeLabel(), info.expiresAt());
     }
 
-    private OpsVehicleQr toQrView(DevDummySeedService.VehicleChallengeInfo qr, HttpServletRequest request) {
+    private OpsVehicleQr toQrView(DevDummySeedService.VehicleChallengeInfo qr, Map<UUID, RegisteredVehicle> vehicleMap,
+                                HttpServletRequest request) {
         if (qr == null) return null;
         String base = opsSession.isDeployment() ? "https://majung.cloud" : localOrigin(request);
         String link = base + "/#vehicle/" + qr.challengeId() + "/" + qr.code();
-        return new OpsVehicleQr(qr.challengeId(), qr.vehicleId(), qr.vehicleName(), qr.code(), link,
+        RegisteredVehicle rv = vehicleMap.get(qr.vehicleId());
+        String vCode = rv == null ? null : rv.vehicleCode;
+        return new OpsVehicleQr(qr.challengeId(), qr.vehicleId(), qr.vehicleName(), vCode, qr.code(), link,
                 qr.expiresAt(), qr.claimantMajungId());
     }
 

@@ -552,9 +552,10 @@
     const confirmBtn = $('confirm-qr-btn');
     if (state.vehicleQr) {
       qrEl.textContent = state.vehicleQr.link;
+      const codeText = state.vehicleQr.vehicleCode ? ` (${state.vehicleQr.vehicleCode})` : '';
       qrMeta.textContent = state.vehicleQr.claimantMajungId
         ? `${state.vehicleQr.claimantMajungId} 님이 요청했습니다! 오른쪽 "차량에서 승인"을 누르세요.`
-        : `${state.vehicleQr.vehicleName} · 폰 앱에서 링크 입력 후 여기서 승인하세요.`;
+        : `${state.vehicleQr.vehicleName}${codeText} · 폰 앱에서 링크 입력 후 여기서 승인하세요.`;
       confirmBtn.disabled = !state.vehicleQr.claimantMajungId;
     } else {
       qrEl.textContent = 'QR 미발급 (QR 새로 발급 클릭)';
@@ -606,7 +607,9 @@
 
       const sub = document.createElement('div');
       sub.className = 'muted';
-      sub.textContent = m.vehicleName || '차량 미연결 계정';
+      sub.textContent = m.vehicleName
+        ? (m.vehicleCode ? `${m.vehicleName} · ${m.vehicleCode}` : m.vehicleName)
+        : '차량 미연결 계정';
       meta.append(titleRow, sub);
 
       const actions = document.createElement('div');

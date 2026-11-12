@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS vehicle_passenger_trust (
     UNIQUE (vehicle_id, passenger_id)
 );
 CREATE INDEX IF NOT EXISTS vehicle_passenger_trust_passenger ON vehicle_passenger_trust(passenger_id, status, updated_at);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'majung_app') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE vehicle_passenger_trust TO majung_app;
+    END IF;
+END
+$$;

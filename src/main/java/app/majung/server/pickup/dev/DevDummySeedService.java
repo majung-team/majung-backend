@@ -238,7 +238,10 @@ public class DevDummySeedService {
 
         if (spec.vehicleId() != null) {
             RegisteredVehicle v = vehicles.findById(spec.vehicleId()).orElseGet(() ->
-                    createVehicle(spec.vehicleId(), spec.vehicleName(), now.minusSeconds(3600L - (index * 60L))));
+                    createVehicle(spec.vehicleId(), spec.vehicleName(), spec.nickname(), now.minusSeconds(3600L - (index * 60L))));
+            if (backfillDummyVehicleMetadata(v, spec.vehicleName(), spec.nickname())) {
+                vehicles.saveAndFlush(v);
+            }
             if (!links.existsById(v.id)) {
                 VehicleAccountLink link = new VehicleAccountLink();
                 link.vehicleId = v.id;
@@ -251,7 +254,11 @@ public class DevDummySeedService {
 
     private void ensureSpareVehicleAndChallenge(Instant now) {
         RegisteredVehicle spare = vehicles.findById(SPARE_UNLINKED_VEHICLE_ID)
-                .orElseGet(() -> createVehicle(SPARE_UNLINKED_VEHICLE_ID, SPARE_UNLINKED_VEHICLE_NAME, now.minusSeconds(900)));
+                .orElseGet(() -> createVehicle(SPARE_UNLINKED_VEHICLE_ID, SPARE_UNLINKED_VEHICLE_NAME,
+                        "전시 · 테스트용 미연결 차량", now.minusSeconds(900)));
+        if (backfillDummyVehicleMetadata(spare, SPARE_UNLINKED_VEHICLE_NAME, "전시 · 테스트용 미연결 차량")) {
+            vehicles.saveAndFlush(spare);
+        }
         if (!links.existsById(spare.id) && challenges.findById(spare.id).isEmpty()) {
             VehicleAccountChallenge spareChallenge = new VehicleAccountChallenge();
             spareChallenge.vehicleId = spare.id;
@@ -321,7 +328,7 @@ public class DevDummySeedService {
         members.saveAndFlush(m);
 
         if (isDriver) {
-            RegisteredVehicle v = createVehicle(UUID.randomUUID(), vehicleName, clock.instant());
+            RegisteredVehicle v = createVehicle(UUID.randomUUID(), vehicleName, normalized, clock.instant());
             VehicleAccountLink link = new VehicleAccountLink();
             link.vehicleId = v.id;
             link.member = m;
@@ -1036,18 +1043,42 @@ public class DevDummySeedService {
         challengeCodes.clear();
     }
 
-    private RegisteredVehicle createVehicle(UUID id, String displayName, Instant registeredAt) {
+    private RegisteredVehicle createVehicle(UUID id, String displayName, String defaultHint, Instant registeredAt) {
         String rawToken = secretToken("veh-" + id);
         RegisteredVehicle v = new RegisteredVehicle();
         v.id = id;
         v.credentialHash = tokens.hash(rawToken);
         v.vehicleCode = VehicleCodeGenerator.nextUnique(vehicles);
         v.displayName = displayName;
-        v.vehicleModel = displayName;
         v.directRequestEnabled = true;
+        backfillDummyVehicleMetadata(v, displayName, defaultHint);
         v.registeredAt = registeredAt;
         vehicleTokens.put(id, rawToken);
         return vehicles.saveAndFlush(v);
+    }
+
+    private boolean backfillDummyVehicleMetadata(RegisteredVehicle v, String displayName, String defaultHint) {
+        boolean changed = false;
+        String[] parts = displayName == null ? new String[0] : displayName.split("\\s*·\\s*", 2);
+        String parsedModel = parts.length > 0 ? parts[0].strip() : null;
+        String parsedPlate = parts.length > 1 ? parts[1].strip() : null;
+        if (v.vehicleCode == null || v.vehicleCode.isBlank()) {
+            v.vehicleCode = VehicleCodeGenerator.nextUnique(vehicles);
+            changed = true;
+        }
+        if ((v.vehicleModel == null || v.vehicleModel.isBlank()) && parsedModel != null && !parsedModel.isBlank()) {
+            v.vehicleModel = parsedModel.length() > 64 ? parsedModel.substring(0, 64) : parsedModel;
+            changed = true;
+        }
+        if ((v.licensePlate == null || v.licensePlate.isBlank()) && parsedPlate != null && !parsedPlate.isBlank()) {
+            v.licensePlate = parsedPlate.length() > 32 ? parsedPlate.substring(0, 32) : parsedPlate;
+            changed = true;
+        }
+        if ((v.ownerHint == null || v.ownerHint.isBlank()) && defaultHint != null && !defaultHint.isBlank()) {
+            v.ownerHint = defaultHint.length() > 80 ? defaultHint.substring(0, 80) : defaultHint;
+            changed = true;
+        }
+        return changed;
     }
 
     private Pickup createLivePickup(UUID vehicleId, String participantName, PickupApi.Place place,
