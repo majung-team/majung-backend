@@ -3,23 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마중 관리자 콘솔 · 실서버 테스트</title>
+  <title>마중 관리자 리모컨</title>
   <link rel="stylesheet" href="/api/v1/ops/ops.css" />
 </head>
 <body>
   <section id="login-view" class="login-shell hidden">
     <div class="login-card">
       <div class="brand-badge">MAJUNG OPS</div>
-      <h1>마중 관리자 콘솔</h1>
-      <p class="muted">실서버(<code>majung.cloud</code>)와 내 iPhone 앱을 연결해 1인 테스트·차량 시뮬레이션·더미 계정을 제어하는 비공개 관리자 페이지입니다.</p>
+      <h1>마중 관리자 로그인</h1>
+      <p class="muted">실서버(<code>majung.cloud</code>)와 내 iPhone 앱을 혼자 편하게 테스트하는 비공개 리모컨입니다. 한 번 로그인하면 같은 브라우저에서 7일간 유지됩니다.</p>
       <form id="login-form" class="form-stack">
         <label>관리자 키 (<code>MAJUNG_ADMIN_KEY</code>)
-          <input id="admin-key-input" type="password" autocomplete="off" placeholder="서버 환경변수 MAJUNG_ADMIN_KEY 입력" required />
+          <input id="admin-key-input" type="password" autocomplete="off" placeholder="키를 붙여넣으세요" required />
         </label>
         <div id="login-error" class="alert hidden"></div>
-        <button class="btn btn-primary btn-full" id="login-submit-btn" type="submit">관리자 인증</button>
+        <button class="btn btn-primary btn-full" id="login-submit-btn" type="submit">로그인</button>
       </form>
-      <p class="hint">인증 시 HttpOnly·Secure 보안 세션 쿠키가 발급되며 브루트포스 방지가 적용됩니다.</p>
+      <div class="key-help">
+        <strong>키 확인 위치 (GCP VM SSH):</strong>
+        <code id="key-cmd-text">sudo grep '^MAJUNG_ADMIN_KEY=' /etc/majung/server.env</code>
+        <button class="btn btn-secondary btn-sm" id="copy-key-cmd-btn" type="button">명령어 복사</button>
+      </div>
     </div>
   </section>
 
@@ -28,21 +32,19 @@
       <div class="topbar-inner">
         <div>
           <div class="badges-row">
-            <span id="env-badge" class="badge badge-blue">환경 확인 중</span>
+            <span id="env-badge" class="badge badge-blue">확인 중</span>
             <span id="slot-badge" class="badge badge-slate">slot</span>
           </div>
-          <h1>마중 비공개 관리자 콘솔</h1>
-          <p class="subtitle">내 실기기 iPhone과 서버 대 서버 환경에서 더미 운전자·차량·요청·QR을 실시간 제어합니다.</p>
+          <h1>마중 1인 테스트 리모컨</h1>
         </div>
         <div class="topbar-actions">
           <label class="toggle-chip">
             <input id="auto-refresh-toggle" type="checkbox" checked />
             <span>5초 자동 갱신</span>
           </label>
-          <a class="btn btn-secondary" href="/account" target="_blank" rel="noopener">탑승자 웹 열기</a>
-          <button class="btn btn-secondary" id="refresh-btn" type="button">새로고침</button>
-          <button class="btn btn-danger" id="reset-btn" type="button">더미 초기화</button>
-          <button class="btn btn-secondary hidden" id="logout-btn" type="button">로그아웃</button>
+          <button class="btn btn-secondary btn-sm" id="refresh-btn" type="button">새로고침</button>
+          <button class="btn btn-danger btn-sm" id="reset-btn" type="button">더미 초기화</button>
+          <button class="btn btn-secondary btn-sm hidden" id="logout-btn" type="button">로그아웃</button>
         </div>
       </div>
     </header>
@@ -50,163 +52,185 @@
     <main class="container">
       <div id="banner" class="banner hidden" role="status"></div>
 
-      <section class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card"><span class="kpi-label">실가입 회원</span><strong id="kpi-real">-</strong></div>
-        <div class="kpi-card"><span class="kpi-label">더미 계정</span><strong id="kpi-dummy">-</strong></div>
-        <div class="kpi-card"><span class="kpi-label">연결 차량</span><strong id="kpi-vehicles">-</strong></div>
-        <div class="kpi-card"><span class="kpi-label">진행 중 픽업</span><strong id="kpi-pickups">-</strong></div>
-        <div class="kpi-card"><span class="kpi-label">대기 중 요청</span><strong id="kpi-requests">-</strong></div>
-      </section>
-
-      <section class="card card-accent">
-        <div class="section-head">
+      <section class="target-bar">
+        <div class="target-bar-main">
           <div>
-            <h2>1. 내 실계정(iPhone) 테스트 환경 원클릭 연결</h2>
-            <p class="muted">iPhone 앱에서 카카오 로그인한 내 계정을 골라 더미 지인·초대·실시간 픽업을 즉시 주입하거나 개별 이벤트를 보낼 수 있습니다.</p>
-          </div>
-          <div class="inline-form">
-            <input id="inject-query" type="text" placeholder="직접 입력: 마중 ID(예: MJ-...) 또는 닉네임" />
-            <button class="btn btn-primary" id="inject-query-btn" type="button">입력 계정 시나리오 주입</button>
-          </div>
-        </div>
-        <div id="real-members-grid" class="real-members-grid"></div>
-
-        <div class="subgrid-three">
-          <div class="subbox">
-            <h3>더미 지인 연결 보내기</h3>
-            <div class="form-stack">
-              <label>더미 계정
-                <select id="conn-dummy-select"></select>
-              </label>
-              <label>받을 계정 (내 iPhone 등)
-                <select id="conn-target-select"></select>
-              </label>
-              <div class="row-actions">
-                <button class="btn btn-primary btn-sm" id="conn-accept-btn" type="button">즉시 지인 연결</button>
-                <button class="btn btn-secondary btn-sm" id="conn-pending-btn" type="button">지인 요청 보내기</button>
-              </div>
+            <span class="target-label">지금 조종할 내 폰 계정</span>
+            <div class="target-row">
+              <select id="active-target-select"></select>
+              <button class="btn btn-secondary btn-sm" id="copy-target-id-btn" type="button">내 마중ID 복사</button>
+              <span id="target-vehicle-pill" class="badge badge-slate">차량 확인 중</span>
             </div>
           </div>
-
-          <div class="subbox">
-            <h3>더미 운전자가 초대 보내기</h3>
-            <div class="form-stack">
-              <label>더미 운전자
-                <select id="inv-driver-select"></select>
-              </label>
-              <label>받을 탑승자 (내 iPhone 등)
-                <select id="inv-passenger-select"></select>
-              </label>
-              <label>만날 장소
-                <select id="inv-place-select"></select>
-              </label>
-              <button class="btn btn-primary btn-sm" id="inv-send-btn" type="button">운전자 초대 발송</button>
-            </div>
-          </div>
-
-          <div class="subbox">
-            <h3>더미 탑승자가 요청 보내기</h3>
-            <div class="form-stack">
-              <label>더미 탑승자
-                <select id="sim-passenger-select"></select>
-              </label>
-              <label>운전자 (더미·내 계정 차량)
-                <select id="sim-driver-select"></select>
-              </label>
-              <label>만날 장소
-                <select id="sim-place-select"></select>
-              </label>
-              <button class="btn btn-secondary btn-sm" id="sim-request-btn" type="button">탑승 요청 전송</button>
-            </div>
+          <div class="mini-stats">
+            <span class="stat-pill">실회원 <strong id="kpi-real">-</strong></span>
+            <span class="stat-pill">더미 <strong id="kpi-dummy">-</strong></span>
+            <span class="stat-pill">진행 픽업 <strong id="kpi-pickups">-</strong></span>
+            <span class="stat-pill">대기 요청 <strong id="kpi-requests">-</strong></span>
           </div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="section-head">
-          <div>
-            <h2>2. 진행 중 픽업 · 실시간 차량 조종 (내 iPhone 지도 연동)</h2>
-            <p class="muted">iPhone에서 시작한 픽업이나 주입한 픽업의 차량 위치를 이동시키고, 자동 주행·장소 제안 수락·도착 알림을 테스트합니다.</p>
+      <nav class="tab-bar" role="tablist">
+        <button class="tab-btn active" type="button" data-tab="remote">리모컨 (쉽게 테스트)</button>
+        <button class="tab-btn" type="button" data-tab="activity">전체 요청 · 픽업 목록</button>
+        <button class="tab-btn" type="button" data-tab="advanced">더미 목록 · 고급 설정</button>
+      </nav>
+
+      <!-- TAB 1: EASY REMOTE CONTROL -->
+      <section id="tab-remote" class="tab-panel">
+        <div class="card card-accent">
+          <h2>1단계 · 내 폰에 바로 상황 만들기</h2>
+          <p class="muted">아래 버튼 중 하나만 누르면 선택한 계정의 iPhone 앱 화면이 바로 바뀝니다.</p>
+          <div class="quick-grid">
+            <button class="quick-btn quick-primary" id="q-auto-start-btn" type="button">
+              <strong>⚡ 방금 보낸 요청 바로 수락·출발</strong>
+              <span>폰에서 더미 운전자에게 요청 보낸 뒤 누르세요</span>
+            </button>
+            <button class="quick-btn" id="q-live-pickup-btn" type="button">
+              <strong>🚘 진행 중 픽업 바로 띄우기</strong>
+              <span>곧바로 차량 이동·도착을 시험할 때</span>
+            </button>
+            <button class="quick-btn" id="q-invite-btn" type="button">
+              <strong>📩 운전자 초대 하나 받기</strong>
+              <span>누를 때마다 다른 운전자가 초대를 보냅니다</span>
+            </button>
+            <button class="quick-btn" id="q-friend-btn" type="button">
+              <strong>👋 지인 연결 요청 받기</strong>
+              <span>사람 탭에서 수락·거절 흐름을 테스트할 때</span>
+            </button>
+            <button class="quick-btn" id="q-dummy-req-my-car-btn" type="button">
+              <strong>🚕 더미 탑승자 → 내 연결 차량으로 요청</strong>
+              <span>내 계정에 연결된 차량으로 더미가 지인연결 + 마중요청</span>
+            </button>
           </div>
-          <button class="btn btn-secondary btn-sm" id="seed-samples-btn" type="button">샘플 픽업·요청 추가</button>
         </div>
-        <div id="pickups-list" class="stack-list"></div>
-      </section>
 
-      <section class="card">
-        <div class="section-head">
-          <div>
-            <h2>3. 마중 요청 및 초대 대기열 (더미 운전자 대리 응답)</h2>
-            <p class="muted">iPhone 앱에서 더미 운전자에게 보낸 요청을 여기서 수락·시작하면 내 폰 화면이 즉시 진행 중 상태로 전환됩니다.</p>
-          </div>
-          <select id="request-filter">
-            <option value="OPEN">진행/대기만 보기</option>
-            <option value="ALL">최근 전체 보기</option>
-          </select>
-        </div>
-        <div id="requests-list" class="stack-list"></div>
-      </section>
-
-      <section class="grid-two">
-        <section class="card">
-          <h2>4. 비로그인 게스트 초대 · 차량 QR 연결</h2>
-          <div class="link-box">
-            <div class="row-between">
-              <strong>게스트 초대 링크 (#join)</strong>
-              <button class="btn btn-secondary btn-sm" id="new-invite-btn" type="button">새 초대 만들기</button>
-            </div>
-            <p class="mono" id="guest-invite-url">-</p>
-            <div class="row-actions">
-              <button class="btn btn-secondary btn-sm" id="copy-invite-btn" type="button">링크 복사</button>
-              <a class="btn btn-primary btn-sm" id="open-invite-link" href="/#" target="_blank" rel="noopener">새 탭으로 확인</a>
-            </div>
-          </div>
-          <div class="link-box">
-            <div class="row-between">
-              <strong>차량 연결 QR 링크 (#vehicle · 전시용 쏘나타)</strong>
-              <div class="row-actions">
-                <button class="btn btn-secondary btn-sm" id="new-qr-btn" type="button">QR 발급</button>
-                <button class="btn btn-primary btn-sm" id="confirm-qr-btn" type="button">차량에서 승인</button>
-              </div>
-            </div>
-            <p class="mono" id="vehicle-qr-url">-</p>
-            <div class="row-actions">
-              <button class="btn btn-secondary btn-sm" id="copy-qr-btn" type="button">QR 링크 복사</button>
-            </div>
-            <p class="muted" id="vehicle-qr-meta"></p>
-          </div>
-          <div class="link-box">
-            <div class="row-between">
-              <strong>실차량 기기 등록 코드 발급 (Admin)</strong>
-              <button class="btn btn-secondary btn-sm" id="issue-reg-code-btn" type="button">등록 코드 발급</button>
-            </div>
-            <p class="mono" id="reg-code-output">필요할 때 발급 버튼을 누르면 10분 유효한 43자리 등록 코드가 생성됩니다.</p>
-          </div>
-        </section>
-
-        <section class="card">
+        <div class="card">
           <div class="section-head">
             <div>
-              <h2>5. 더미 · 회원 계정 디렉토리</h2>
-              <p class="muted"><code>마중 ID</code>를 눌러 복사한 뒤 iPhone <code>사람</code> 탭에서 검색할 수 있습니다.</p>
+              <h2>2단계 · 지금 움직이는 픽업 조종</h2>
+              <p class="muted">차량을 접근시키거나 도착 알림을 띄워 내 폰 화면 변화를 바로 확인하세요.</p>
             </div>
           </div>
-          <div class="filter-bar">
-            <input id="member-search-input" type="search" placeholder="이름 또는 마중 ID 필터..." />
-            <select id="member-role-filter">
-              <option value="ALL">전체</option>
-              <option value="REAL">실가입 회원</option>
-              <option value="DRIVER">더미 운전자</option>
-              <option value="PASSENGER">더미 탑승자</option>
-            </select>
+          <div id="remote-pickups-list" class="stack-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>3단계 · 비로그인 게스트 &amp; 차량 QR 원클릭</h2>
+          <div class="grid-two">
+            <div class="link-box">
+              <div class="row-between">
+                <strong>게스트 초대 (#join)</strong>
+                <button class="btn btn-secondary btn-sm" id="new-invite-btn" type="button">새 링크 발급</button>
+              </div>
+              <p class="mono" id="guest-invite-url">-</p>
+              <div class="row-actions">
+                <button class="btn btn-primary btn-sm" id="copy-invite-btn" type="button">링크 복사</button>
+                <a class="btn btn-secondary btn-sm" id="open-invite-link" href="/#" target="_blank" rel="noopener">웹에서 열기</a>
+              </div>
+            </div>
+
+            <div class="link-box">
+              <div class="row-between">
+                <strong>차량 연결 QR (#vehicle)</strong>
+                <button class="btn btn-secondary btn-sm" id="new-qr-btn" type="button">QR 새로 발급</button>
+              </div>
+              <p class="mono" id="vehicle-qr-url">-</p>
+              <p class="muted" id="vehicle-qr-meta"></p>
+              <div class="row-actions compact-gap">
+                <button class="btn btn-secondary btn-sm" id="copy-qr-btn" type="button">QR 링크 복사</button>
+                <button class="btn btn-success btn-sm" id="confirm-qr-btn" type="button">차량에서 승인</button>
+              </div>
+            </div>
           </div>
-          <form id="create-dummy-form" class="inline-form compact-gap">
-            <input id="new-dummy-nickname" type="text" placeholder="새 더미 닉네임 (예: 김테스트)" required />
-            <input id="new-dummy-vehicle" type="text" placeholder="차량명 (비우면 탑승자)" />
-            <button class="btn btn-primary btn-sm" type="submit">더미 추가</button>
-          </form>
-          <div id="members-directory" class="directory-list"></div>
-        </section>
+        </div>
+      </section>
+
+      <!-- TAB 2: ALL REQUESTS & PICKUPS -->
+      <section id="tab-activity" class="tab-panel hidden">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>마중 요청 및 초대 대기열</h2>
+              <p class="muted">대기 중인 요청을 개별적으로 수락·거절·출발시킬 수 있습니다.</p>
+            </div>
+            <div class="row-actions">
+              <select id="request-filter">
+                <option value="OPEN">진행·대기만 보기</option>
+                <option value="ALL">최근 전체 보기</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" id="seed-samples-btn" type="button">샘플 일괄 추가</button>
+            </div>
+          </div>
+          <div id="requests-list" class="stack-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>전체 픽업 상세 목록</h2>
+          <div id="pickups-list" class="stack-list"></div>
+        </div>
+      </section>
+
+      <!-- TAB 3: DUMMY DIRECTORY & ADVANCED -->
+      <section id="tab-advanced" class="tab-panel hidden">
+        <div class="grid-two">
+          <section class="card">
+            <h2>더미 · 회원 계정 디렉토리</h2>
+            <p class="muted"><code>ID 복사</code>를 눌러 iPhone <code>사람</code> 탭에서 검색하세요.</p>
+            <div class="filter-bar compact-gap">
+              <input id="member-search-input" type="search" placeholder="이름 또는 마중 ID 검색..." />
+              <select id="member-role-filter">
+                <option value="ALL">전체</option>
+                <option value="REAL">실회원</option>
+                <option value="DRIVER">더미 운전자</option>
+                <option value="PASSENGER">더미 탑승자</option>
+              </select>
+            </div>
+            <form id="create-dummy-form" class="inline-form compact-gap">
+              <input id="new-dummy-nickname" type="text" placeholder="새 더미 닉네임" required />
+              <input id="new-dummy-vehicle" type="text" placeholder="차량명 (비우면 탑승자)" />
+              <button class="btn btn-primary btn-sm" type="submit">더미 추가</button>
+            </form>
+            <div id="members-directory" class="directory-list"></div>
+          </section>
+
+          <section class="card">
+            <h2>수동 지정 연결 · 요청 · 차량 등록 코드</h2>
+            <div class="subbox">
+              <h3>특정 더미로 지인 연결</h3>
+              <div class="form-stack">
+                <label>더미 계정 <select id="conn-dummy-select"></select></label>
+                <label>대상 계정 <select id="conn-target-select"></select></label>
+                <div class="row-actions">
+                  <button class="btn btn-primary btn-sm" id="conn-accept-btn" type="button">즉시 연결</button>
+                  <button class="btn btn-secondary btn-sm" id="conn-pending-btn" type="button">요청 보내기</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="subbox compact-gap">
+              <h3>장소 지정 운전자 초대 / 탑승 요청</h3>
+              <div class="form-stack">
+                <label>운전자 <select id="inv-driver-select"></select></label>
+                <label>탑승자 <select id="inv-passenger-select"></select></label>
+                <label>만날 장소 <select id="inv-place-select"></select></label>
+                <div class="row-actions">
+                  <button class="btn btn-primary btn-sm" id="inv-send-btn" type="button">운전자 초대 발송</button>
+                  <button class="btn btn-secondary btn-sm" id="sim-request-btn" type="button">탑승자 대리 요청</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="subbox compact-gap">
+              <div class="row-between">
+                <h3>실차량 기기 등록 코드 발급</h3>
+                <button class="btn btn-secondary btn-sm" id="issue-reg-code-btn" type="button">코드 발급</button>
+              </div>
+              <p class="mono muted" id="reg-code-output">차량 앱 실기기 등록 시 필요한 43자리 일회용 코드를 발급합니다.</p>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
   </div>

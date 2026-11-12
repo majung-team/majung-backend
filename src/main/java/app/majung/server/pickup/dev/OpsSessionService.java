@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class OpsSessionService {
     public static final String COOKIE_NAME = "MAJUNG_OPS_SESSION";
-    private static final Duration SESSION_TTL = Duration.ofHours(8);
+    private static final Duration SESSION_TTL = Duration.ofDays(7);
     private static final long LOCKOUT_WINDOW_MILLIS = 60_000L;
     private static final int MAX_FAILED_ATTEMPTS = 5;
 

@@ -19,9 +19,11 @@ import app.majung.server.pickup.dev.OpsSessionService;
 import app.majung.server.pickup.domain.Member;
 import app.majung.server.pickup.domain.Pickup;
 import app.majung.server.pickup.domain.RegisteredVehicle;
+import app.majung.server.pickup.domain.VehicleAccountLink;
 import app.majung.server.pickup.repository.MemberRepository;
 import app.majung.server.pickup.repository.PickupRepository;
 import app.majung.server.pickup.repository.RegisteredVehicleRepository;
+import app.majung.server.pickup.repository.VehicleAccountLinkRepository;
 import app.majung.server.pickup.service.RideRequestService;
 import app.majung.server.pickup.service.TokenService;
 import jakarta.servlet.http.Cookie;
@@ -56,6 +58,7 @@ class OpsConsoleTest {
     @Autowired WebApplicationContext context;
     @Autowired MemberRepository members;
     @Autowired RegisteredVehicleRepository vehicles;
+    @Autowired VehicleAccountLinkRepository links;
     @Autowired PickupRepository pickups;
     @Autowired RideRequestService rideRequests;
     @Autowired TokenService tokens;
@@ -171,26 +174,77 @@ class OpsConsoleTest {
                         .content("{\"pickupId\":\"" + newPickupId + "\",\"action\":\"arrive\"}"))
                 .andExpect(status().isOk());
 
-        // Real physical vehicle protection: non-dummy vehicles cannot be controlled by Ops Console
+        // Verify one-click quick actions
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"send-invite\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"send-friend-request\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"start-live-pickup\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        // Dummy passenger -> my linked vehicle flow
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"dummy-request-my-vehicle\"}"))
+                .andExpect(status().isConflict());
+
+        // Real physical vehicle protection: non-dummy vehicles cannot be driven by Ops Console,
+        // while dummy passengers requesting my linked vehicle CAN be driven by Ops Console passenger actions.
+        String realCarRawToken = tokens.issue();
         RegisteredVehicle realCar = new RegisteredVehicle();
         realCar.id = UUID.randomUUID();
-        realCar.credentialHash = tokens.hash(tokens.issue());
+        realCar.credentialHash = tokens.hash(realCarRawToken);
         realCar.displayName = "실제 등록 차량";
         realCar.registeredAt = Instant.now();
         vehicles.saveAndFlush(realCar);
 
-        Pickup realPickup = Pickup.create(tokens.hash(tokens.issue()), tokens.hash(tokens.issue()),
-                Instant.now(), Instant.now().plusSeconds(300), Instant.now().plusSeconds(3600),
-                new PickupApi.Place("잠실역", 37.5133, 127.1001));
-        realPickup.id = UUID.randomUUID();
-        realPickup.vehicleId = realCar.id;
-        realPickup.status = Pickup.Status.ACTIVE;
-        pickups.saveAndFlush(realPickup);
+        VehicleAccountLink realLink = new VehicleAccountLink();
+        realLink.vehicleId = realCar.id;
+        realLink.member = realUser;
+        realLink.linkedAt = Instant.now();
+        links.saveAndFlush(realLink);
+
+        mvc.perform(post("/api/v1/ops/api/quick")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMemberId\":\"" + realUser.id + "\",\"kind\":\"dummy-request-my-vehicle\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        String realCarAuth = "Bearer " + realCarRawToken;
+        var received = rideRequests.received(realCarAuth);
+        assertFalse(received.isEmpty());
+        UUID incomingReqId = received.get(0).requestId();
+        rideRequests.accept(realCarAuth, incomingReqId);
+        RideRequestApi.Started realCarPickup = rideRequests.start(realCarAuth, incomingReqId);
+
+        mvc.perform(post("/api/v1/ops/api/pickups/passenger-action")
+                        .cookie(opsCookie).header("X-Ops-CSRF", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pickupId\":\"" + realCarPickup.pickupId() + "\",\"readiness\":\"READY\",\"quickMessage\":\"지금 내려가요\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participant.readiness").value("READY"))
+                .andExpect(jsonPath("$.quickMessage.text").value("지금 내려가요"));
 
         mvc.perform(post("/api/v1/ops/api/pickups/tick")
                         .cookie(opsCookie).header("X-Ops-CSRF", csrf)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"pickupId\":\"" + realPickup.id + "\",\"action\":\"arrive\"}"))
+                        .content("{\"pickupId\":\"" + realCarPickup.pickupId() + "\",\"action\":\"arrive\"}"))
                 .andExpect(status().isForbidden());
 
         // Reset dummy data cleans ONLY dev-dummy and preserves real Kakao member

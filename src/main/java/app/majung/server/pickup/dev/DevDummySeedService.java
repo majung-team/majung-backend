@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
@@ -403,6 +404,147 @@ public class DevDummySeedService {
         return rideRequestService.invite(vehicleAuth, new RideRequestApi.Invite(conn.id, place, UUID.randomUUID()));
     }
 
+    @Transactional
+    public String quickAction(UUID targetId, String kind) {
+        seedCatalogSafely();
+        Member target = members.findById(targetId)
+                .orElseThrow(() -> new ApiException(404, "MEMBER_NOT_FOUND", "대상 회원을 찾을 수 없어요."));
+        List<RideRequest> existing = rideRequests.forMember(target.id);
+
+        return switch (kind) {
+            case "auto-start-request" -> {
+                RideRequest activeAlready = existing.stream()
+                        .filter(r -> r.passengerId.equals(target.id) && "ACTIVE".equals(r.status))
+                        .findFirst().orElse(null);
+                if (activeAlready != null) {
+                    yield "이미 진행 중인 픽업이 있습니다. 아래 픽업 리모컨으로 차량을 이동·도착시켜 보세요.";
+                }
+                RideRequest candidate = existing.stream()
+                        .filter(r -> r.passengerId.equals(target.id)
+                                && ("QUEUED".equals(r.status) || "PENDING".equals(r.status))
+                                && members.findById(r.driverId).map(m -> DUMMY_PROVIDER.equals(m.provider)).orElse(false))
+                        .sorted(java.util.Comparator.comparing((RideRequest r) -> r.createdAt != null ? r.createdAt : Instant.EPOCH).reversed())
+                        .findFirst()
+                        .orElseThrow(() -> new ApiException(409, "NO_PENDING_REQUEST",
+                                "더미 운전자에게 보낸 대기 요청이 아직 없어요. 폰 앱에서 먼저 요청을 보내거나 '진행 중 픽업 바로 띄우기'를 눌러주세요."));
+                if ("PENDING".equals(candidate.status)) {
+                    driverAction(candidate.id, "accept");
+                }
+                driverAction(candidate.id, "start");
+                yield "방금 보낸 요청을 수락하고 차량 운행을 시작했습니다.";
+            }
+            case "send-invite" -> {
+                DummyMemberSpec chosen = pickAvailableDummyDriver(target.id, existing);
+                List<PickupApi.Place> places = List.of(
+                        new PickupApi.Place("판교역 2번 출구", 37.3947, 127.1112),
+                        new PickupApi.Place("강남역 2번 출구", 37.4979, 127.0276),
+                        new PickupApi.Place("선릉역 1번 출구", 37.5045, 127.0489),
+                        new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516),
+                        new PickupApi.Place("정자역 3번 출구", 37.3670, 127.1081)
+                );
+                long inviteCount = existing.stream().filter(r -> "INVITED".equals(r.status)).count();
+                PickupApi.Place place = places.get((int) (inviteCount % places.size()));
+                sendDriverInvitation(chosen.id(), target.id, place);
+                yield chosen.nickname() + " 운전자가 '" + place.label() + "' 초대를 보냈습니다.";
+            }
+            case "start-live-pickup" -> {
+                boolean hasActive = existing.stream()
+                        .anyMatch(r -> r.passengerId.equals(target.id) && "ACTIVE".equals(r.status));
+                if (hasActive) {
+                    yield "이미 진행 중인 픽업이 있습니다. 아래 차량 이동·도착 리모컨을 바로 누르실 수 있어요.";
+                }
+                DummyMemberSpec chosen = pickAvailableDummyDriver(target.id, existing);
+                PickupApi.Place place = new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516);
+                ensureConnection(member(chosen.id()), target, member(chosen.id()), target, "ACCEPTED");
+                Pickup active = createLivePickup(chosen.vehicleId(), target.nickname, place,
+                        37.2820, 127.0460, 240L, Pickup.Readiness.PREPARING, "지금 1번 출구 쪽으로 가고 있어요!");
+                saveRideRequest(UUID.randomUUID(), chosen.id(), target.id, chosen.vehicleId(),
+                        active.id, "ACTIVE", false, place, null);
+                yield chosen.nickname() + " 차량과의 실시간 픽업을 바로 시작했습니다.";
+            }
+            case "dummy-request-my-vehicle" -> {
+                boolean hasVehicle = links.findByMemberIdOrderByLinkedAtDesc(target.id).stream().anyMatch(l ->
+                        vehicles.findById(l.vehicleId).map(v -> v.revokedAt == null).orElse(false));
+                if (!hasVehicle) {
+                    throw new ApiException(409, "DRIVER_VEHICLE_REQUIRED",
+                            "먼저 내 계정에 차량을 연결해주세요 (차량 앱 로그인 후 QR 연결 또는 '차량 연결 QR' 사용).");
+                }
+                DummyMemberSpec dummy = pickAvailableDummyPassengerForDriver(target.id, existing);
+                Member dummyMember = member(dummy.id());
+                ensureConnection(dummyMember, target, dummyMember, target, "ACCEPTED");
+                List<PickupApi.Place> places = List.of(
+                        new PickupApi.Place("강남역 2번 출구", 37.4979, 127.0276),
+                        new PickupApi.Place("판교역 2번 출구", 37.3947, 127.1112),
+                        new PickupApi.Place("광교중앙역 1번 출구", 37.2886, 127.0516),
+                        new PickupApi.Place("선릉역 1번 출구", 37.5045, 127.0489),
+                        new PickupApi.Place("수원역 환승센터", 37.2660, 127.0005)
+                );
+                long reqCount = existing.stream().filter(r -> r.driverId.equals(target.id) && isOpenRequest(r)).count();
+                PickupApi.Place place = places.get((int) (reqCount % places.size()));
+                rideRequestService.submit(dummyMember.id, new RideRequestApi.Submit(target.id, place, UUID.randomUUID()));
+                yield dummyMember.nickname + " (" + dummyMember.majungId + ") 더미 탑승자가 내 차량으로 '" + place.label() + "' 마중 요청을 보냈습니다.";
+            }
+            case "send-friend-request" -> {
+                Member dummy = members.findAll().stream()
+                        .filter(m -> DUMMY_PROVIDER.equals(m.provider) && !m.id.equals(DEMO_SELF_ID) && !m.id.equals(target.id))
+                        .filter(m -> {
+                            UUID first = m.id.compareTo(target.id) < 0 ? m.id : target.id;
+                            UUID second = first.equals(m.id) ? target.id : m.id;
+                            return connections.findByFirstMemberAndSecondMember(first, second).isEmpty();
+                        })
+                        .findFirst()
+                        .orElseThrow(() -> new ApiException(409, "ALL_CONNECTED", "모든 더미 계정과 이미 연결되어 있거나 요청 대기 중입니다."));
+                ensureConnection(dummy, target, dummy, target, "PENDING");
+                yield dummy.nickname + " (" + dummy.majungId + ") 계정이 지인 연결을 요청했습니다.";
+            }
+            default -> throw new ApiException(400, "INVALID_QUICK_ACTION", "지원하지 않는 빠른 테스트 동작이에요.");
+        };
+    }
+
+    private boolean isOpenRequest(RideRequest r) {
+        if ("PENDING".equals(r.status) || "INVITED".equals(r.status) || "QUEUED".equals(r.status)) {
+            return r.expiresAt == null || clock.instant().isBefore(r.expiresAt);
+        }
+        if ("ACTIVE".equals(r.status)) {
+            return r.pickupId != null && pickups.findById(r.pickupId)
+                    .map(p -> !p.isTerminal() && !p.isExpired(clock.instant()))
+                    .orElse(false);
+        }
+        return false;
+    }
+
+    private DummyMemberSpec pickAvailableDummyDriver(UUID targetId, List<RideRequest> existing) {
+        Set<UUID> busyDrivers = new HashSet<>();
+        for (RideRequest r : existing) {
+            if (r.passengerId.equals(targetId) && isOpenRequest(r)) {
+                busyDrivers.add(r.driverId);
+            }
+        }
+        return DUMMY_SPECS.stream()
+                .filter(s -> s.isDriver() && !s.id().equals(DEMO_SELF_ID) && !s.id().equals(targetId))
+                .filter(s -> !busyDrivers.contains(s.id()))
+                .filter(s -> pickups.findByVehicleId(s.vehicleId()).stream().allMatch(Pickup::isTerminal))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(409, "NO_FREE_DRIVER",
+                        "현재 대기 가능한 더미 운전자가 모두 사용 중입니다. 진행 중인 픽업을 완료하거나 초기화해주세요."));
+    }
+
+    private DummyMemberSpec pickAvailableDummyPassengerForDriver(UUID driverId, List<RideRequest> existing) {
+        Set<UUID> busyPassengers = new HashSet<>();
+        for (RideRequest r : existing) {
+            if (r.driverId.equals(driverId) && isOpenRequest(r)) {
+                busyPassengers.add(r.passengerId);
+            }
+        }
+        return DUMMY_SPECS.stream()
+                .filter(s -> !s.id().equals(DEMO_SELF_ID) && !s.id().equals(driverId))
+                .filter(s -> !busyPassengers.contains(s.id()))
+                .sorted(Comparator.comparingInt(s -> s.isDriver() ? 1 : 0))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(409, "NO_FREE_PASSENGER",
+                        "모든 더미 탑승자가 이미 내 차량에 대기 요청을 보냈습니다. 요청을 처리하거나 초기화해주세요."));
+    }
+
     public List<DummyMemberSpec> specs() {
         return DUMMY_SPECS;
     }
@@ -502,6 +644,9 @@ public class DevDummySeedService {
         Member passenger = members.findById(passengerId)
                 .filter(m -> DUMMY_PROVIDER.equals(m.provider))
                 .orElseThrow(() -> new ApiException(400, "DUMMY_PASSENGER_REQUIRED", "탑승자 대리 요청은 더미 계정에 대해서만 지원해요."));
+        members.findById(driverId)
+                .filter(driver -> !driver.id.equals(passenger.id))
+                .ifPresent(driver -> ensureConnection(passenger, driver, passenger, driver, "ACCEPTED"));
         return rideRequestService.submit(passenger.id, new RideRequestApi.Submit(driverId, place, UUID.randomUUID()));
     }
 
@@ -916,7 +1061,13 @@ public class DevDummySeedService {
     private void ensureConnection(Member a, Member b, Member requester, Member recipient, String status) {
         UUID first = a.id.compareTo(b.id) < 0 ? a.id : b.id;
         UUID second = first.equals(a.id) ? b.id : a.id;
-        if (connections.findByFirstMemberAndSecondMember(first, second).isPresent()) {
+        MemberConnection existing = connections.findByFirstMemberAndSecondMember(first, second).orElse(null);
+        if (existing != null) {
+            if ("ACCEPTED".equals(status) && !"ACCEPTED".equals(existing.status)) {
+                existing.status = "ACCEPTED";
+                existing.updatedAt = clock.instant();
+                connections.saveAndFlush(existing);
+            }
             return;
         }
         Instant now = clock.instant();

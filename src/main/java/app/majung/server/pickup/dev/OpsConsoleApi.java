@@ -96,6 +96,10 @@ public class OpsConsoleApi {
 
     public record ConfirmQrBody(UUID challengeId) { }
 
+    public record QuickActionBody(UUID targetMemberId, String kind) { }
+
+    public record QuickActionResult(String message, OpsState state) { }
+
     private final OpsSessionService opsSession;
     private final DevDummySeedService seedService;
     private final MemberRepository members;
@@ -296,6 +300,16 @@ public class OpsConsoleApi {
     public VehicleRegistrationApi.IssuedCode issueVehicleRegistrationCode(HttpServletRequest request) {
         opsSession.requireAuthorized(request, true);
         return seedService.issueRealVehicleRegistrationCode();
+    }
+
+    @PostMapping("/api/v1/ops/api/quick")
+    public QuickActionResult quickAction(@RequestBody QuickActionBody body, HttpServletRequest request) {
+        opsSession.requireAuthorized(request, true);
+        if (body == null || body.targetMemberId() == null || body.kind() == null || body.kind().isBlank()) {
+            throw new ApiException(400, "INVALID_BODY", "대상 계정과 빠른 테스트 동작을 선택해주세요.");
+        }
+        String message = seedService.quickAction(body.targetMemberId(), body.kind());
+        return new QuickActionResult(message, buildState(request));
     }
 
     private OpsState buildState(HttpServletRequest request) {
