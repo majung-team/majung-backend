@@ -116,7 +116,7 @@ src/test/java/app/majung/server/pickup/
 
 ---
 
-## 5. 상세 문서 · 관련 저장소 · 개발 참여
+## 5. 상세 문서 및 관련 저장소
 
 | 분류 | 문서 |
 | --- | --- |
@@ -131,5 +131,3 @@ src/test/java/app/majung/server/pickup/
 | [majung-web](https://github.com/majung-team/majung-web) | 운전자 · 탑승자 모바일 웹 |
 | [majung-ios](https://github.com/majung-team/majung-ios) | SwiftUI iOS 모바일 앱 |
 | [majung-backend](https://github.com/majung-team/majung-backend) | Spring Boot API 및 운영 배포 |
-
-기여 시 [기여 가이드](CONTRIBUTING.md)를 따르며, 로컬 커밋 메시지 검사 도구는 `npm ci`로 설치한다. 환경변수 템플릿은 [deploy/server.env.example](deploy/server.env.example)을 참고하고(운영 키·DB 비밀번호 저장소 작성 금지), 기능 변경 시 실제 실행한 테스트 결과와 남은 검증 항목을 PR에 기록한다.
