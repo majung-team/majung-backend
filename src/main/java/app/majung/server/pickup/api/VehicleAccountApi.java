@@ -62,7 +62,11 @@ public class VehicleAccountApi {
     public record LinkView(
             @Schema(description = "연동된 차량 식별자 (UUID)") UUID vehicleId,
             @Schema(description = "차량 명칭", example = "카니발 12가3456") String vehicleName,
-            @Schema(description = "연동 완료 시각") Instant linkedAt) { }
+            @Schema(description = "연동 완료 시각") Instant linkedAt,
+            @Schema(description = "고정 차량 호출 코드", example = "VEH-7K2M9A") String vehicleCode,
+            @Schema(description = "차종", example = "아이오닉 5") String vehicleModel,
+            @Schema(description = "차량 번호", example = "12가 3456") String licensePlate,
+            @Schema(description = "운전자 구별 힌트", example = "송*준 아빠") String ownerHint) { }
 
     private final VehicleAccountService service;
 

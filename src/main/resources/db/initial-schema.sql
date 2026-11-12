@@ -46,7 +46,12 @@ CREATE TABLE registered_vehicle (
     id UUID PRIMARY KEY,
     version BIGINT NOT NULL,
     credential_hash VARCHAR(255) NOT NULL UNIQUE,
+    vehicle_code VARCHAR(32) NOT NULL UNIQUE,
     display_name VARCHAR(255) NOT NULL,
+    vehicle_model VARCHAR(64),
+    license_plate VARCHAR(32),
+    owner_hint VARCHAR(80),
+    direct_request_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     registered_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     revoked_at TIMESTAMP(6) WITH TIME ZONE
 );
@@ -114,7 +119,7 @@ CREATE INDEX vehicle_account_expiry ON vehicle_account_challenge(expires_at);
 CREATE TABLE ride_request (
     id UUID PRIMARY KEY,
     version BIGINT NOT NULL,
-    driver_id UUID NOT NULL REFERENCES member_account(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES member_account(id) ON DELETE CASCADE,
     passenger_id UUID NOT NULL REFERENCES member_account(id) ON DELETE CASCADE,
     vehicle_id UUID REFERENCES registered_vehicle(id),
     pickup_id UUID,
@@ -130,6 +135,18 @@ CREATE TABLE ride_request (
 );
 CREATE INDEX ride_request_driver ON ride_request(driver_id, created_at);
 CREATE INDEX ride_request_passenger ON ride_request(passenger_id, created_at);
+CREATE INDEX ride_request_vehicle ON ride_request(vehicle_id, created_at);
+
+CREATE TABLE vehicle_passenger_trust (
+    id UUID PRIMARY KEY,
+    version BIGINT NOT NULL,
+    vehicle_id UUID NOT NULL REFERENCES registered_vehicle(id) ON DELETE CASCADE,
+    passenger_id UUID NOT NULL REFERENCES member_account(id) ON DELETE CASCADE,
+    status VARCHAR(32) NOT NULL,
+    updated_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    UNIQUE (vehicle_id, passenger_id)
+);
+CREATE INDEX vehicle_passenger_trust_passenger ON vehicle_passenger_trust(passenger_id, status, updated_at);
 
 CREATE TABLE arrival_push (
     place_version BIGINT NOT NULL DEFAULT 1,

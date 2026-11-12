@@ -24,6 +24,7 @@ import app.majung.server.pickup.service.PickupService;
 import app.majung.server.pickup.service.RideRequestService;
 import app.majung.server.pickup.service.TokenService;
 import app.majung.server.pickup.service.VehicleAccountService;
+import app.majung.server.pickup.service.VehicleCodeGenerator;
 import app.majung.server.pickup.service.VehicleRegistrationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -484,7 +485,7 @@ public class DevDummySeedService {
                         new PickupApi.Place("선릉역 1번 출구", 37.5045, 127.0489),
                         new PickupApi.Place("수원역 환승센터", 37.2660, 127.0005)
                 );
-                long reqCount = existing.stream().filter(r -> r.driverId.equals(target.id) && isOpenRequest(r)).count();
+                long reqCount = existing.stream().filter(r -> java.util.Objects.equals(r.driverId, target.id) && isOpenRequest(r)).count();
                 PickupApi.Place place = overridePlace != null ? overridePlace : places.get((int) (reqCount % places.size()));
                 rideRequestService.submit(dummyMember.id, new RideRequestApi.Submit(target.id, place, UUID.randomUUID()));
                 yield dummyMember.nickname + " (" + dummyMember.majungId + ") 더미 탑승자가 내 차량으로 '" + place.label() + "' 마중 요청을 보냈습니다.";
@@ -554,7 +555,7 @@ public class DevDummySeedService {
     private DummyMemberSpec pickAvailableDummyPassengerForDriver(UUID driverId, List<RideRequest> existing) {
         Set<UUID> busyPassengers = new HashSet<>();
         for (RideRequest r : existing) {
-            if (r.driverId.equals(driverId) && isOpenRequest(r)) {
+            if (java.util.Objects.equals(r.driverId, driverId) && isOpenRequest(r)) {
                 busyPassengers.add(r.passengerId);
             }
         }
@@ -1040,7 +1041,10 @@ public class DevDummySeedService {
         RegisteredVehicle v = new RegisteredVehicle();
         v.id = id;
         v.credentialHash = tokens.hash(rawToken);
+        v.vehicleCode = VehicleCodeGenerator.nextUnique(vehicles);
         v.displayName = displayName;
+        v.vehicleModel = displayName;
+        v.directRequestEnabled = true;
         v.registeredAt = registeredAt;
         vehicleTokens.put(id, rawToken);
         return vehicles.saveAndFlush(v);

@@ -12,6 +12,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,9 +26,33 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 public class RideRequestApi {
     public record Submit(
-            @Schema(description = "마중을 요청할 운전자 회원 식별자 (UUID)") @NotNull UUID driverId,
+            @Schema(description = "마중을 요청할 운전자 회원 식별자 (UUID)") UUID driverId,
+            @Schema(description = "마중을 요청할 차량 식별자 (UUID, 계정 미연결 차량 직접 요청 시)") UUID vehicleId,
             @Schema(description = "탑승 희망 장소") @NotNull @Valid PickupApi.Place place,
-            @Schema(description = "클라이언트 멱등성 요청 식별자 (UUID)") @NotNull UUID requestId) { }
+            @Schema(description = "클라이언트 멱등성 요청 식별자 (UUID)") @NotNull UUID requestId) {
+        public Submit(UUID driverId, PickupApi.Place place, UUID requestId) {
+            this(driverId, null, place, requestId);
+        }
+    }
+
+    public record RejectOptions(
+            @Schema(description = "향후 이 탑승자의 직접 요청 차단 여부", example = "false") boolean block) { }
+
+    public record VehicleLookupView(
+            @Schema(description = "차량 식별자 (UUID)") UUID vehicleId,
+            @Schema(description = "고정 차량 호출 코드", example = "VEH-7K2M9A") String vehicleCode,
+            @Schema(description = "표시 차량 명칭", example = "아이오닉 5 · 12가 3456") String displayName,
+            @Schema(description = "차종", example = "아이오닉 5") String vehicleModel,
+            @Schema(description = "차량 번호", example = "12가 3456") String licensePlate,
+            @Schema(description = "운전자 구별 힌트", example = "송*준 아빠") String ownerHint,
+            @Schema(description = "직접 마중 요청 수신 허용 여부") boolean directRequestEnabled,
+            @Schema(description = "운전자 계정 연결 여부") boolean linkedDriver,
+            @Schema(description = "과거 수락으로 신뢰된 자주 타는 차량 여부") boolean trusted,
+            @Schema(description = "연결된 운전자 닉네임 (연결 시)") String linkedDriverNickname,
+            @Schema(description = "연결된 운전자 마중 ID (연결 시)") String linkedDriverMajungId) { }
+
+    public record FavoriteVehicleList(
+            @Schema(description = "자주 타는 차량 목록") List<VehicleLookupView> vehicles) { }
 
     public record Invite(
             @Schema(description = "초대할 승객과의 연결 식별자 (UUID)") @NotNull UUID connectionId,
@@ -45,14 +70,20 @@ public class RideRequestApi {
     public record View(
             @Schema(description = "마중 요청 식별자 (UUID)") UUID requestId,
             @Schema(description = "요청 상태 (PENDING, ACCEPTED, REJECTED, CANCELLED, STARTED)", example = "PENDING") String status,
-            @Schema(description = "상대방 닉네임", example = "김운전") String nickname,
-            @Schema(description = "상대방 마중 아이디", example = "driver_kim") String majungId,
+            @Schema(description = "상대방 닉네임 또는 차량 명칭", example = "김운전") String nickname,
+            @Schema(description = "상대방 마중 아이디 또는 차량 코드", example = "driver_kim") String majungId,
             @Schema(description = "픽업 장소") PickupApi.Place place,
             @Schema(description = "요청 만료 시각") Instant expiresAt,
             @Schema(description = "내 앞 대기 순번 인원 수 (대기열 위치)", example = "1") Integer peopleAhead,
             @Schema(description = "현재 운행 중인 픽업 잔여 시간 (초)", example = "300") Long currentPickupRemainingSeconds,
             @Schema(description = "잔여 시간 데이터 유효 기간 (밀리초)", example = "10000") long currentPickupValidForMillis,
-            @Schema(description = "운전자가 먼저 보낸 초대인지 여부", example = "false") boolean driverInvitation) { }
+            @Schema(description = "운전자가 먼저 보낸 초대인지 여부", example = "false") boolean driverInvitation,
+            @Schema(description = "대상 차량 식별자 (UUID)") UUID vehicleId,
+            @Schema(description = "대상 차량 호출 코드", example = "VEH-7K2M9A") String vehicleCode,
+            @Schema(description = "차종", example = "아이오닉 5") String vehicleModel,
+            @Schema(description = "차량 번호", example = "12가 3456") String licensePlate,
+            @Schema(description = "운전자 구별 힌트", example = "송*준 아빠") String ownerHint,
+            @Schema(description = "차량-탑승자 신뢰 상태 (FIRST_TIME, TRUSTED, CONNECTED, BLOCKED)") String trustStatus) { }
 
     public record ListView(
             @Schema(description = "마중 요청 목록") List<View> requests) { }
@@ -72,7 +103,34 @@ public class RideRequestApi {
         this.service = service;
     }
 
-    @Operation(summary = "마중 요청 생성", description = "탑승자가 특정 운전자에게 자신이 위치한 곳으로 마중을 요청합니다.")
+    @Operation(summary = "차량 코드로 직접 요청 대상 차량 조회", description = "차량 코드로 차종·차량 번호·구별 힌트를 확인해 요청 전 대상을 검증합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "차량 정보 조회 성공"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+            @ApiResponse(responseCode = "403", description = "요청 차단된 차량"),
+            @ApiResponse(responseCode = "404", description = "차량을 찾을 수 없음")
+    })
+    @GetMapping("/api/v1/ride-requests/vehicles/lookup")
+    VehicleLookupView lookupVehicle(@Parameter(hidden = true) Authentication auth,
+                                    @Parameter(description = "차량 호출 코드", example = "VEH-7K2M9A") @RequestParam("code") String code) {
+        return service.lookupVehicleByCode(AccountIdentity.requireMember(auth), code);
+    }
+
+    @Operation(summary = "자주 타는 차량 목록 조회", description = "과거 요청 수락으로 신뢰가 쌓인 차량 목록을 조회합니다.")
+    @GetMapping("/api/v1/ride-requests/favorite-vehicles")
+    FavoriteVehicleList favoriteVehicles(@Parameter(hidden = true) Authentication auth) {
+        return new FavoriteVehicleList(service.favoriteVehicles(AccountIdentity.requireMember(auth)));
+    }
+
+    @Operation(summary = "자주 타는 차량 목록에서 제거", description = "탑승자의 자주 타는 차량 즐겨찾기 항목을 제거합니다.")
+    @DeleteMapping("/api/v1/ride-requests/favorite-vehicles/{vehicleId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void removeFavoriteVehicle(@Parameter(hidden = true) Authentication auth,
+                               @Parameter(description = "차량 식별자 (UUID)") @PathVariable UUID vehicleId) {
+        service.removeFavoriteVehicle(AccountIdentity.requireMember(auth), vehicleId);
+    }
+
+    @Operation(summary = "마중 요청 생성", description = "탑승자가 특정 운전자 또는 차량에게 자신이 위치한 곳으로 마중을 요청합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "마중 요청 생성 완료"),
             @ApiResponse(responseCode = "400", description = "입력값 검증 실패"),
@@ -248,14 +306,15 @@ public class RideRequestApi {
         return service.accept(auth, id);
     }
 
-    @Operation(summary = "마중 요청 거절", description = "운전자가 탑승자의 마중 요청을 거절합니다.")
+    @Operation(summary = "마중 요청 거절 (선택적 차단)", description = "운전자가 탑승자의 마중 요청을 거절하며, block=true 전달 시 이후 직접 요청을 차단합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "요청 거절 성공")
     })
     @PostMapping("/api/v1/vehicles/ride-requests/{id}/reject")
     View reject(@Parameter(description = "차량/운전자 인증 헤더") @RequestHeader(value = "Authorization", required = false) String auth,
-                @Parameter(description = "마중 요청 식별자 (UUID)") @PathVariable UUID id) {
-        return service.reject(auth, id);
+                @Parameter(description = "마중 요청 식별자 (UUID)") @PathVariable UUID id,
+                @RequestBody(required = false) RejectOptions options) {
+        return service.reject(auth, id, options != null && options.block());
     }
 
     @Operation(summary = "마중 운행 시작 (픽업 세션 전환)", description = "수락된 마중 요청을 정식 픽업 운행 세션으로 전환하고 운행을 시작합니다.")
