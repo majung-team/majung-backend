@@ -82,10 +82,10 @@ src/test/java/app/majung/server/pickup/
 
 | 구분 | 구성 |
 | --- | --- |
-| **백엔드** | Java 17 컴파일(JDK 25 런타임) · Spring Boot 4.0.8 · Spring MVC · Spring Security OAuth2 Client · Spring Data JPA |
-| **데이터** | PostgreSQL(운영) · H2(로컬/테스트) · Spring Session JDBC(`SPRING_SESSION`) |
-| **알림** | Server-Sent Events(SSE) · Web Push(VAPID) · Apple APNs · springdoc OpenAPI (Swagger UI) |
-| **인프라** | Caddy(HTTPS 리버스 프록시) · GitHub Actions · GCP VM (단일 VM Blue-Green) |
+| **백엔드** | Java 17 컴파일(JDK 25) · Spring Boot 4.0.8<br>Spring MVC · OAuth2 Client · Spring Data JPA |
+| **데이터** | PostgreSQL(운영) · H2(로컬/테스트)<br>Spring Session JDBC(`SPRING_SESSION`) |
+| **알림** | Server-Sent Events(SSE) · Web Push(VAPID)<br>Apple APNs · springdoc OpenAPI(Swagger UI) |
+| **인프라** | Caddy(HTTPS 리버스 프록시)<br>GitHub Actions · GCP 단일 VM Blue-Green |
 
 ---
 
@@ -96,8 +96,8 @@ src/test/java/app/majung/server/pickup/
 
 | 구분 | 범위 |
 | --- | --- |
-| **자동화** | 차량·계정 연결, 초대·대기열, 위치·ETA 유효성 검증, 상태 전환·종료<br>Blue-Green 후보 서버·공유 세션·배포 실패 복구 경로 (`124/125` Gradle · `29` deploy) |
-| **추후 확인** | 실제 휴대전화·차량 간 전체 주행 흐름, iPhone 실기기 푸시 배너 수신<br>LTE·Wi-Fi 전환, 실차 시동 OFF/ON 복구 |
+| **자동화** | 차량·계정 연결, 초대·대기열, 위치·ETA 검증<br>Blue-Green · 공유 세션 (`124/125` Gradle · `29` deploy) |
+| **추후&nbsp;확인** | 실제 휴대전화·차량 간 전체 주행 흐름<br>iPhone 푸시 수신 · LTE 전환 · 실차 시동 복구 |
 
 ---
 
@@ -115,10 +115,10 @@ src/test/java/app/majung/server/pickup/
 
 | 분류 | 문서 |
 | --- | --- |
-| **계정 · 차량** | [차량 QR 최초 연결](docs/vehicle-enrollment.md) · [차량 계정 연결](docs/vehicle-account-link.md) · [내부 등록 및 권한 철회](docs/vehicle-registration.md) · [계정 및 사람 검색](docs/account-connections.md) |
-| **픽업 · 공유** | [픽업 요청 및 대기열](docs/ride-requests.md) · [차량 위치 최신성](docs/vehicle-state.md) · [도착 임박 푸시](docs/arrival-push.md) · [장소 변경 제안](docs/place-proposal.md) · [픽업 생명주기](docs/pickup-lifecycle.md) |
-| **운영 · 개발** | [Blue-Green 배포](docs/blue-green.md) · [GitHub Actions 배포](docs/github-actions.md) · [백업 복원·운영 점검](docs/operations-recovery.md) · [복구·ETA·권한 검증](docs/stability-verification.md) · [현재 개발 기준](docs/revised-plan.md) · [기여 가이드](CONTRIBUTING.md) |
-| **허브 · 회고** | [전체 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md) · [개발 현황](https://github.com/majung-team/majung/blob/main/docs/development-status.md) · [Wiki 기술 회고](https://github.com/majung-team/majung/wiki#%EA%B8%B0%EC%88%A0-%ED%9A%8C%EA%B3%A0) |
+| **계정&nbsp;·&nbsp;차량** | [차량 QR 최초 연결](docs/vehicle-enrollment.md) · [차량 계정 연결](docs/vehicle-account-link.md)<br>[내부 등록 및 권한 철회](docs/vehicle-registration.md) · [계정 및 사람 검색](docs/account-connections.md) |
+| **픽업&nbsp;·&nbsp;공유** | [픽업 요청 및 대기열](docs/ride-requests.md) · [차량 위치 최신성](docs/vehicle-state.md)<br>[도착 임박 푸시](docs/arrival-push.md) · [장소 변경 제안](docs/place-proposal.md) · [픽업 생명주기](docs/pickup-lifecycle.md) |
+| **운영&nbsp;·&nbsp;개발** | [Blue-Green 배포](docs/blue-green.md) · [GitHub Actions 배포](docs/github-actions.md) · [백업·운영 점검](docs/operations-recovery.md)<br>[복구·ETA·권한 검증](docs/stability-verification.md) · [현재 개발 기준](docs/revised-plan.md) · [기여 가이드](CONTRIBUTING.md) |
+| **허브&nbsp;·&nbsp;회고** | [전체 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md) · [개발 현황](https://github.com/majung-team/majung/blob/main/docs/development-status.md)<br>[Wiki 기술 회고](https://github.com/majung-team/majung/wiki#%EA%B8%B0%EC%88%A0-%ED%9A%8C%EA%B3%A0) |
 
 | 저장소 | 역할 |
 | --- | --- |
