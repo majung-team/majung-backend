@@ -154,3 +154,8 @@ Actuator의 Prometheus 지표는 blue `127.0.0.1:9081`, green `127.0.0.1:9082`�
 설정 폴더를 `root:majung 0710`으로 두어 서비스 그룹에 통과 권한만 부여한다. `server.env`와 `deploy-policy.json`은 root 전용 0600을 유지한다. 배포 도우미는 비밀 파일 권한과 서비스 사용자로 슬롯 파일 읽기를 확인한 뒤 후보 서버를 시작하며, 검사 실패 시 전환하지 않는다. 운영 픽업을 수동 취소하거나 서버를 재시작하지 않고 권한을 복구했다.
 
 권한 복구 뒤 기존 픽업이 스케줄러에 의해 EXPIRED로 전환됐다. 만료 시각이 마지막 차량 활동 + 30분과 일치했고, 차량 좌표·ETA·미확정 제안·도착 푸시 구독이 남지 않은 것을 집계로 확인했다. 진행 중 픽업 0개, 만료 지연 0개, 공개 운영 health HTTP 200 / UP으로 돌아왔다. 수동 DB 수정·수동 픽업 취소·서비스 재시작은 하지 않았다. 배포·운영 Python 회귀 시험 27개 통과.
+
+## 관련 Wiki 회고 및 2026-11-12 기준
+
+- [단일 VM Blue-Green 배포와 예약 백업은 왜 중간에 멈췄을까?](https://github.com/majung-team/majung/wiki/%EB%8B%A8%EC%9D%BC-VM-Blue-Green-%EB%B0%B0%ED%8F%AC%EC%99%80-%EC%98%88%EC%95%BD-%EB%B0%B1%EC%97%85%EC%9D%80-%EC%99%9C-%EC%A4%91%EA%B0%84%EC%97%90-%EB%A9%88%EC%B7%84%EC%9D%84%EA%B9%8C)
+- 2026-11-12 기준 `deploy/` Python 배포·운영 테스트는 29개, 백엔드 Gradle 테스트는 총 125건 중 `124 passed, 1 skipped`를 유지하고 있다.

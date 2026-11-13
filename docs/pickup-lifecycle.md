@@ -347,6 +347,13 @@ src/main/resources/db/add-pickup-lifecycle.sql
 - [블루·그린 배포](blue-green.md)
 - [전체 시스템 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md)
 - [개발 현황 및 검증 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 픽업 종료·해제 차단 회고](https://github.com/majung-team/majung/wiki/%ED%94%BD%EC%97%85%EC%9D%B4-%EB%81%9D%EB%82%98%EA%B1%B0%EB%82%98-%EC%97%B0%EA%B2%B0%EC%9D%84-%EB%81%8A%EC%9C%BC%EB%A9%B4-%EC%9C%84%EC%B9%98-%EA%B3%B5%EC%9C%A0%EB%8A%94-%EB%B0%94%EB%A1%9C-%EB%A9%88%EC%B6%9C%EA%B9%8C)
+- [Wiki: 단일 VM Blue-Green·자동 만료 복구 회고](https://github.com/majung-team/majung/wiki/%EB%8B%A8%EC%9D%BC-VM-Blue-Green-%EB%B0%B0%ED%8F%AC%EC%99%80-%EC%98%88%EC%95%BD-%EB%B0%B1%EC%97%85%EC%9D%80-%EC%99%9C-%EC%A4%91%EA%B0%84%EC%97%90-%EB%A9%88%EC%B7%84%EC%9D%84%EA%B9%8C)
+
+### 이후 운영 보완 메모
+
+- 2026-11-02 (`#66`): `/etc/majung/active-slot` 권한 문제로 중단됐던 자동 만료 스케줄러를 복구해 지연 픽업을 `EXPIRED`로 정상 전환했다.
+- PR `#64`: 도착·연결 해제·만료 전환 시 미확정 장소 제안과 도착 임박 푸시 구독이 함께 비워지도록 정리했다.
 
 ---
 

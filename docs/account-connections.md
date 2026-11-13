@@ -922,6 +922,12 @@ DB 장애나 높은 서버 부하 상황에서도 같은 응답 시간이 보장
 - [GitHub Actions 배포](github-actions.md)
 - [블루·그린 배포](blue-green.md)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 휴대전화 QR 연결과 실시간 상태 회고](https://github.com/majung-team/majung/wiki/%ED%9C%B4%EB%8C%80%EC%A0%84%ED%99%94-QR-%EC%97%B0%EA%B2%B0%EA%B3%BC-%EC%9B%B9-iOS-%EC%8B%A4%EC%8B%9C%EA%B0%84-%EC%83%81%ED%83%9C%EB%8A%94-%EC%99%9C-%EC%96%B4%EA%B8%8B%EB%82%AC%EC%9D%84%EA%B9%8C)
+
+### 2026-11-12 반영 메모
+
+- `7c93456` (`#78`): iOS 앱용 카카오 로그인 결과 전달 API를 추가했다.
+- `102a9a4`: 카카오 계정 탈퇴(연결 해제 웹훅·정리), 계정 상태 SSE, 게스트 대기 이탈 처리, APNs 설정을 반영했고, `84d9498` 기준 단위·통합 테스트 `124 passed, 1 skipped` (총 125건)를 확인했다.
 
 ### 공식 참고 문서
 

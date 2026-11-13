@@ -539,6 +539,12 @@ Blue-Green 배포 중에는 신규 코드와 기존 코드가 일정 시간 같�
 - [전체 시스템 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md)
 - [운영 버전 및 배포 기록](https://github.com/majung-team/majung/blob/main/docs/runtime-2026-10-29.md)
 - [개발 현황과 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 단일 VM Blue-Green·예약 백업 회고](https://github.com/majung-team/majung/wiki/%EB%8B%A8%EC%9D%BC-VM-Blue-Green-%EB%B0%B0%ED%8F%AC%EC%99%80-%EC%98%88%EC%95%BD-%EB%B0%B1%EC%97%85%EC%9D%80-%EC%99%9C-%EC%A4%91%EA%B0%84%EC%97%90-%EB%A9%88%EC%B7%84%EC%9D%84%EA%B9%8C)
+
+## 15. 2026년 11월 운영 보완
+
+- **2026-11-02 (`#66`)**: `/etc/majung` 디렉터리를 `root:majung 0710`으로 정비하고, 전환 전 `majung` 계정의 `/etc/majung/active-slot` 읽기 검사를 추가해 비활성 슬롯의 스케줄러 누락과 자동 만료 중단을 재발 방지했다.
+- **2026-11 (`#75`, `3546902`)**: 기능 확장으로 후보 서버 Spring Boot 기동 시간이 30초를 넘기는 사례가 발생해 `deploy/blue_green.py`의 health 대기 한도를 `75초`(최대 150회)로 상향했다. `deploy/` 회귀 시험 29개 통과.
 
 ---
 

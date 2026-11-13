@@ -52,3 +52,9 @@ RFC 8291 `aes128gcm` 암호화를 사용한다. VAPID 개인 키는 서버 환�
 서버 전체 시험 115개 통과. 신규 시험은 도착 전/실제 도착 분리, 중복 도착 차단, 잘못된 구독 키 거절, 토큰·좌표가 없는 payload, 로컬 HTTP 수신의 aes128gcm 암호화와 상태 응답을 확인한다. 외부 푸시 서비스의 실제 휴대전화 알림 표시는 이 시험에 포함하지 않는다.
 
 사용 라이브러리: [webpush-java](https://github.com/web-push-libs/webpush-java). 전송은 리다이렉트를 끄고 연결 5초·응답 8초로 제한한 기존 HTTP 클라이언트를 사용한다.
+
+## 2026-11-12 보완 및 참고
+
+- PR `#64`: 도착·연결 해제·자동 만료 시 미확정 제안과 함께 도착 푸시 구독을 정리해 종료 뒤 잔여 푸시 발송을 차단했다.
+- `102a9a4`: iOS 푸시 연동을 위한 APNs 설정 확장과 계정 SSE 반영을 포함해 백엔드 전체 테스트는 `125건 중 124 passed, 1 skipped`로 확인했다.
+- [Wiki: 픽업 종료·해제 차단 회고](https://github.com/majung-team/majung/wiki/%ED%94%BD%EC%97%85%EC%9D%B4-%EB%81%9D%EB%82%98%EA%B1%B0%EB%82%98-%EC%97%B0%EA%B2%B0%EC%9D%84-%EB%81%8A%EC%9C%BC%EB%A9%B4-%EC%9C%84%EC%B9%98-%EA%B3%B5%EC%9C%A0%EB%8A%94-%EB%B0%94%EB%A1%9C-%EB%A9%88%EC%B6%9C%EA%B9%8C)

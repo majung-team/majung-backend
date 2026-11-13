@@ -506,6 +506,12 @@ test/place-proposal-integration
 - [차량 SDK 경로 재확인](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/route-recovery.md)
 - [웹 장소 선택](https://github.com/majung-team/majung-web/blob/main/docs/pickup-place-selection.md)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 픽업 종료·만료·계약 검증 회고](https://github.com/majung-team/majung/wiki/%ED%94%BD%EC%97%85%EC%9D%B4-%EB%81%9D%EB%82%98%EA%B1%B0%EB%82%98-%EC%97%B0%EA%B2%B0%EC%9D%84-%EB%81%8A%EC%9C%BC%EB%A9%B4-%EC%9C%84%EC%B9%98-%EA%B3%B5%EC%9C%A0%EB%8A%94-%EB%B0%94%EB%A1%9C-%EB%A9%88%EC%B6%9C%EA%B9%8C)
+
+### 2026-11-12 반영 메모
+
+- PR `#64`: 도착·연결 해제·자동 만료 시 미확정 장소 제안과 도착 임박 푸시 구독을 함께 정리하도록 보강했다.
+- `102a9a4`: 차량·웹에서 활용할 수 있는 카카오 장소 검색 프록시를 백엔드에 추가했다.
 
 ---
 

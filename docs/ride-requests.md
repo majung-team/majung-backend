@@ -657,6 +657,12 @@ flowchart LR
 - [차량 앱 요청·픽업 흐름](https://github.com/majung-team/majung-vehicle-app/blob/main/docs/request-pickup-flow.md)
 - [웹 장소 선택](https://github.com/majung-team/majung-web/blob/main/docs/pickup-place-selection.md)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 휴대전화 QR 연결과 실시간 상태 회고](https://github.com/majung-team/majung/wiki/%ED%9C%B4%EB%8C%80%EC%A0%84%ED%99%94-QR-%EC%97%B0%EA%B2%B0%EA%B3%BC-%EC%9B%B9-iOS-%EC%8B%A4%EC%8B%9C%EA%B0%84-%EC%83%81%ED%83%9C%EB%8A%94-%EC%99%9C-%EC%96%B4%EA%B8%8B%EB%82%AC%EC%9D%84%EA%B9%8C)
+
+### 2026-11-12 반영 메모
+
+- `502808c` (`#76`): 초대 참여 전 만료·종료 상태를 사전 확인하는 API 설명을 보강했다.
+- `102a9a4`: 계정·요청 목록 실시간 SSE와 게스트 대기 이탈 처리를 추가했고, `84d9498`에서 임시 운영 콘솔·미연결 직접 요청 실험을 되돌려 사람 연결·요청 흐름 기준을 유지했다.
 
 ---
 

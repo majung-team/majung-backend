@@ -577,7 +577,8 @@ GitHub에서 최종적으로 강제하려면 별도의 CI 검사와 브랜치 �
 
 ## 14. 관련 문서
 
-- [현재 개발 및 검증 기준](https://github.com/majung-team/majung/blob/main/docs/current-development.md)
+- [현재 개발 및 검증 기준](docs/revised-plan.md)
+- [전체 서비스 Wiki](https://github.com/majung-team/majung/wiki)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
 - [현재 서비스 접속·설치·테스트 안내](https://github.com/majung-team/majung/blob/main/docs/team-testing.md)
 - [초기 개발·역할 분담 계획](https://github.com/majung-team/majung/blob/main/docs/revised-plan.md)

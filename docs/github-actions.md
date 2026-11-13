@@ -562,6 +562,13 @@ compute.instances.getGuestAttributes
 - [전체 시스템 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md)
 - [운영 버전 및 배포 기록](https://github.com/majung-team/majung/blob/main/docs/runtime-2026-10-29.md)
 - [개발 현황 및 PR 근거](https://github.com/majung-team/majung/blob/main/docs/development-status.md)
+- [Wiki: 단일 VM Blue-Green·예약 백업 회고](https://github.com/majung-team/majung/wiki/%EB%8B%A8%EC%9D%BC-VM-Blue-Green-%EB%B0%B0%ED%8F%AC%EC%99%80-%EC%98%88%EC%95%BD-%EB%B0%B1%EC%97%85%EC%9D%80-%EC%99%9C-%EC%A4%91%EA%B0%84%EC%97%90-%EB%A9%88%EC%B7%84%EC%9D%84%EA%B9%8C)
+
+## 16. 2026년 11월 예약 백업·배포 보완
+
+- **`#56` SSH 출력 분리**: 예약 백업 파이프 앞단에 `gcloud` 최초 키 생성 메시지가 섞이지 않도록 `ssh-keygen -q` 사전 실행으로 아카이브 훼손을 차단했다.
+- **`#62` 예약 백업 WIF**: `schedule` 트리거에서도 Workload Identity Federation 허용 조건이 맞도록 정리해 무인 백업 거부를 복구했다.
+- **`3546902` (`#75`) · `c8ffb61`**: 후보 서버 기동 health 대기를 `75초`로 늘리고, 웹 배포 허용 목록에 iOS Universal Links AASA 경로(`.well-known/apple-app-site-association`)를 반영했다.
 
 ### 공식 참고 자료
 
