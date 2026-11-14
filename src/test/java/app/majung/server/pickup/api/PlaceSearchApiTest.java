@@ -99,4 +99,81 @@ public class PlaceSearchApiTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void keepsNationwideStationMatchesAheadOfDistantPartialTokenMatches() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v2/local/search/keyword.json", exchange -> {
+            String query = exchange.getRequestURI().getRawQuery();
+            String json;
+            if (query != null && query.contains("radius=20000")) {
+                json = """
+                    {
+                      "meta": { "is_end": false },
+                      "documents": [
+                        {
+                          "place_name": "서울서남부농협 신림역지점",
+                          "road_address_name": "서울 관악구 남부순환로 1597",
+                          "category_group_name": "은행",
+                          "x": "126.9278",
+                          "y": "37.4842"
+                        }
+                      ]
+                    }
+                    """;
+            } else {
+                json = """
+                    {
+                      "meta": { "is_end": false },
+                      "documents": [
+                        {
+                          "place_name": "서울역",
+                          "road_address_name": "서울 중구 한강대로 405",
+                          "category_group_name": "지하철역",
+                          "x": "126.9707",
+                          "y": "37.5540"
+                        },
+                        {
+                          "place_name": "서울역 1호선",
+                          "road_address_name": "서울 중구 세종대로 지하 2",
+                          "category_group_name": "지하철역",
+                          "x": "126.9720",
+                          "y": "37.5559"
+                        }
+                      ]
+                    }
+                    """;
+            }
+            byte[] out = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.createContext("/v2/local/search/address.json", exchange -> {
+            String json = """
+                {
+                  "meta": { "is_end": true },
+                  "documents": []
+                }
+                """;
+            byte[] out = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            KakaoPlaceSearchService service = new KakaoPlaceSearchService(
+                    "test-rest-key",
+                    "http://127.0.0.1:" + server.getAddress().getPort());
+            PlaceSearchApi.SearchResponse response = service.search("서울역", 1, 37.3208, 126.9482);
+            assertTrue(response.enabled());
+            assertEquals(3, response.items().size());
+            assertEquals("서울역", response.items().get(0).label());
+            assertEquals("서울역 1호선", response.items().get(1).label());
+            assertEquals("서울서남부농협 신림역지점", response.items().get(2).label());
+        } finally {
+            server.stop(0);
+        }
+    }
 }

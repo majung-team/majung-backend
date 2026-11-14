@@ -68,24 +68,44 @@ public class KakaoPlaceSearchService {
         }
 
         String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
-        String keywordUrl = baseUrl + "/v2/local/search/keyword.json?query=" + encoded + "&page=" + page + "&size=10"
-                + (latitude != null ? "&x=" + longitude + "&y=" + latitude + "&radius=20000" : "");
+        String keywordUrl = baseUrl + "/v2/local/search/keyword.json?query=" + encoded + "&page=" + page + "&size=10";
+        String nearbyKeywordUrl = latitude != null
+                ? keywordUrl + "&x=" + longitude + "&y=" + latitude + "&radius=20000"
+                : null;
         String addressUrl = baseUrl + "/v2/local/search/address.json?query=" + encoded + "&page=" + page + "&size=5";
 
         CompletableFuture<UpstreamPage> keywordFuture = CompletableFuture.supplyAsync(() -> fetch(keywordUrl, false));
+        CompletableFuture<UpstreamPage> nearbyFuture = nearbyKeywordUrl != null
+                ? CompletableFuture.supplyAsync(() -> fetch(nearbyKeywordUrl, false))
+                : CompletableFuture.completedFuture(null);
         CompletableFuture<UpstreamPage> addressFuture = CompletableFuture.supplyAsync(() -> fetch(addressUrl, true));
 
         UpstreamPage keywordResult = safeJoin(keywordFuture);
+        UpstreamPage nearbyResult = safeJoin(nearbyFuture);
         UpstreamPage addressResult = safeJoin(addressFuture);
-        if (keywordResult == null && addressResult == null) {
+        if (keywordResult == null && nearbyResult == null && addressResult == null) {
             throw new ApiException(503, "PLACE_SEARCH_FAILED", "장소 검색을 완료하지 못했어요. 잠시 후 다시 시도해주세요.");
         }
 
+        String normalizedQuery = normalize(query);
         Map<String, PlaceSearchApi.SearchItem> deduped = new LinkedHashMap<>();
         boolean hasNext = false;
+        if (nearbyResult != null) {
+            for (PlaceSearchApi.SearchItem item : nearbyResult.items()) {
+                if (isDirectQueryMatch(item, normalizedQuery)) {
+                    deduped.putIfAbsent(dedupeKey(item), item);
+                }
+            }
+        }
         if (keywordResult != null) {
             hasNext |= keywordResult.hasNext();
             for (PlaceSearchApi.SearchItem item : keywordResult.items()) {
+                deduped.putIfAbsent(dedupeKey(item), item);
+            }
+        }
+        if (nearbyResult != null) {
+            hasNext |= nearbyResult.hasNext();
+            for (PlaceSearchApi.SearchItem item : nearbyResult.items()) {
                 deduped.putIfAbsent(dedupeKey(item), item);
             }
         }
@@ -100,6 +120,17 @@ public class KakaoPlaceSearchService {
             merged = List.copyOf(merged.subList(0, 15));
         }
         return new PlaceSearchApi.SearchResponse(true, merged, page < 3 && hasNext);
+    }
+
+    private static String normalize(String text) {
+        if (text == null) return "";
+        return text.replaceAll("\\s+", "").toLowerCase();
+    }
+
+    private static boolean isDirectQueryMatch(PlaceSearchApi.SearchItem item, String normalizedQuery) {
+        if (normalizedQuery.isEmpty() || item == null || item.label() == null) return false;
+        String normalizedLabel = normalize(item.label());
+        return normalizedLabel.equals(normalizedQuery) || normalizedLabel.startsWith(normalizedQuery);
     }
 
     private record UpstreamPage(List<PlaceSearchApi.SearchItem> items, boolean hasNext) { }
