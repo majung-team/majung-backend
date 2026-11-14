@@ -1,129 +1,92 @@
 <div align="center">
-  <img src="docs/media/majung-icon.png" width="76" alt="마중 아이콘" />
-  <h1>마중 백엔드 (Majung Backend)</h1>
-  <p>차량 앱(AAOS)과 모바일 클라이언트(웹·iOS) 사이에서 운전자 계정, 차량 연결, 픽업 초대·요청, 장소 변경, 실시간 위치·ETA 공유를 관리하는 Spring Boot API 서버입니다.</p>
-  <p>
-    <a href="https://github.com/majung-team/majung">마중 프로젝트</a> ·
-    <a href="https://github.com/majung-team/majung/wiki">Wiki</a> ·
-    <a href="https://majung.cloud">모바일 웹</a> ·
-    <a href="https://majung.cloud/api/swagger-ui/index.html">Swagger UI</a> ·
-    <a href="https://majung.cloud/api/v1/health">API Health</a> ·
-    <a href="https://github.com/majung-team/majung/blob/main/docs/development-status.md">개발 현황</a>
-  </p>
+  <img src="docs/media/majung-icon.png" width="72" alt="마중" />
+  <h1>마중 백엔드</h1>
+  <p>차량과 탑승자가 같은 픽업을 보도록, 상태와 접근 권한을 관리하는 서버.</p>
+  <p><a href="https://majung.cloud/api/swagger-ui/index.html">API 명세</a> · <a href="https://majung.cloud/api/v1/health">운영 상태</a> · <a href="https://github.com/majung-team/majung">서비스 소개</a> · <a href="https://github.com/majung-team/majung/wiki">기술 회고</a></p>
 </div>
 
-> 이 서버는 내비게이션 경로나 교통 상황을 직접 계산하지 않습니다. 경로와 예상 도착 시간(ETA)은 차량의 Pleos NaviHelper SDK에서 받은 값을 검증해 탑승자와 공유합니다.
+## 위치를 보내는 것보다, 누구에게 언제 보여줄지가 먼저다
 
----
+차량은 위치와 도착 시간을 보내고, 탑승자는 자신의 픽업을 조회한다. 대기 중인 다음 탑승자에게 앞선 픽업의 위치가 보이거나, 취소한 초대 링크로 계속 접근할 수 있어서는 안 된다.
 
-## 1. 주요 기능
+서버는 차량·운전자·탑승자의 권한과 픽업 상태를 함께 확인한다. 늦게 도착한 위치가 새 위치를 덮어쓰지 않도록 검사하고, 완료·취소·연결 해제 시 조회와 알림도 정리한다. 내비 경로와 실제 도착 시간은 차량의 Pleos SDK가 제공한다.
 
-### 차량 등록 · 운전자 연결
-- **QR 차량 연결**: 차량 화면에 표시된 QR 코드를 운전자가 카카오 로그인 후 승인하면 차량과 계정이 연결됩니다.
-- **접근 권한 관리**: 차량 소유권 인증과는 별개로 앱 이용 권한을 발급하며, 필요할 때 권한을 복구하거나 해제할 수 있습니다.
+| 처리 영역 | 하는 일 |
+| --- | --- |
+| 계정과 차량 | 카카오 로그인·세션, QR 차량 연결·철회, 사람 검색·연결 |
+| 초대와 요청 | 30분 초대 링크·게스트 참여, 요청 수락·대기열·순차 진행 |
+| 위치와 시간 | 전송 순번·시각·장소 버전 확인, 최신·지연·수신 중단 구분 |
+| 소통과 장소 | 준비 상태·짧은 메시지, 장소 제안과 차량 확정 결과 반영 |
+| 종료와 알림 | 픽업 종료 후 접근 차단, 미확정 제안·알림 구독 정리 |
 
-### 계정 · 지인 연결
-- **카카오 로그인 · 계정**: 웹(OAuth2)과 iOS 앱(PKCE) 로그인을 지원하며 닉네임, 마중 ID, 세션 유지, 회원 탈퇴를 처리합니다.
-- **지인 검색 · 요청**: 마중 ID로 사용자를 찾아 친구 연결을 주고받을 수 있고, 미리 연결하지 않은 운전자에게도 검색 후 바로 마중을 요청할 수 있습니다.
+SSE는 ‘상태가 바뀌었다’는 신호만 보낸다. 실제 데이터는 인증된 API로 다시 조회하므로, 재접속하거나 로그아웃한 뒤에도 현재 권한을 검사한다. Web Push와 APNs 발송 코드는 설정과 구독이 있는 경우 사용하며, 실제 iPhone 푸시 수신 검증과는 구분한다.
 
-### 픽업 초대 · 대기열
-- **초대 링크 · 게스트 참여**: 30분 동안 유효한 초대 링크를 발급하며, 탑승자는 회원가입 없이 만날 장소를 먼저 확인한 뒤 참여하거나 대기 중에 나갈 수 있습니다.
-- **요청 대기열 관리**: 여러 탑승자의 마중 요청을 순서대로 관리하고, 목록이 바뀌면 실시간(SSE)으로 알립니다.
-- **픽업 정보 분리**: 차량당 진행 중인 픽업은 1건만 유지하며, 참여자가 아닌 사람에게는 다른 픽업의 위치와 도착 시간을 노출하지 않습니다.
+## 먼저 실행해 보기
 
-### 위치 · ETA · 소통
-- **실시간 위치·ETA 공유**: 차량 앱이 보낸 위치와 예상 도착 시간을 검증해 탑승자 화면(SSE·조회 API)에 전달하며, 픽업이 끝나면 공유를 중단합니다.
-- **준비 상태 · 빠른 메시지**: 탑승자의 준비 상태와 빠른 안내 메시지를 차량 화면(TTS 음성 안내 포함)에 전달하고, 도착이 가까워지면 웹·iOS 푸시 알림을 보냅니다.
+JDK 25와 저장소의 Gradle Wrapper를 사용한다. 기본 설정은 로컬 H2 파일 DB이며, 카카오 로그인과 푸시는 비활성 상태로 시작한다.
 
-### 장소 검색 · 변경 · 도착
-- **장소 · 주소 통합 검색**: 서버가 카카오 로컬 API를 대신 조회해 장소명과 주소 검색 결과를 합쳐 웹·iOS에 제공합니다.
-- **만날 장소 변경**: 탑승자가 새 장소를 제안하면 차량 내비에서 경로를 확인하고, 운전자가 확정하기 전까지는 기존 만날 장소를 유지합니다.
-- **도착 · 종료 처리**: 목적지 반경 100m에 들어가면 자동 도착 처리하며, 최종 완료·취소·만료 시 위치 공유를 끝냅니다(도착 시간이 0분이어도 운전자가 완료 확인을 누르기 전에는 종료되지 않음).
+```sh
+./gradlew bootRun
+```
 
-### 다중 픽업 계획
-- **최적 경유 순서 계산**: 여러 탑승자를 차례로 태울 때 경유지(최대 5곳)를 묶어 가장 짧은 이동 순서를 자동으로 계산하고 경로를 확정합니다.
-- **경유지별 ETA · 완료**: 확정된 순서에 따라 탑승자마다 다른 예상 도착 시간을 계산해 보여주고, 경유지별 완료와 전체 취소를 처리합니다.
+- 상태 확인: `http://127.0.0.1:8080/api/v1/health`
+- API 명세: `http://127.0.0.1:8080/api/swagger-ui.html`
+- DB: `./data/majung` 경로의 H2 파일, 운영 DB와 별도
 
----
+```sh
+./gradlew test bootJar --no-daemon
+python3 -m unittest discover -s deploy -p 'test_*.py'
+```
 
-## 2. 시스템 구성 및 기술 스택
+[기본 설정](src/main/resources/application.properties)을 그대로 쓰면 로컬 API와 DB부터 확인할 수 있다. 회원 로그인·외부 장소 검색·푸시는 각 서비스의 설정이 추가로 필요하다.
+
+| 필요한 기능 | 설정과 안내 |
+| --- | --- |
+| 카카오 로그인 | `MAJUNG_LOGIN_ENABLED`, `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI` — [계정 설정](docs/account-connections.md) |
+| 장소·지도 | 카카오 REST/JavaScript 키 — [장소 검색 코드](src/main/java/app/majung/server/pickup/service/)와 기본 설정 참고 |
+| PostgreSQL | `DB_URL`, `DB_USER`, `DB_PASSWORD` — 운영 설정은 [배포 안내](docs/github-actions.md) 참고 |
+| 도착 알림 | VAPID 또는 APNs 키·구독 — [알림 설정](docs/arrival-push.md) |
+
+로컬 HTTP 로그인에는 리다이렉트 URI와 세션 쿠키의 Secure 설정도 맞춰야 한다. 운영 HTTPS 설정을 그대로 로컬 로그인에 사용할 수 있는 것은 아니다. 실제 키나 세션 값은 저장소에 넣지 않는다.
+
+## 구현에서 중요하게 본 세 가지
+
+**이전 응답이 최신 위치를 덮지 않게** — SDK 시각·서버 수신 시각·전송 순번·장소 버전을 비교한다. 서버는 원래 ETA와 정보의 경과 시간을 나눠 보내고, 웹과 중복 차감하지 않는지 실제 응답으로 대조한다. [위치 최신성](docs/vehicle-state.md) · [응답 대조 시험](deploy/test_eta_contract.mjs)
+
+**종료 처리는 관련 정보까지 함께** — 상태만 완료로 바꾸지 않고 위치·미확정 제안·초대 접근·도착 알림을 정리한다. 취소된 요청이 늦게 다시 와도 과거 요청을 되살리지 않는다. [픽업 생명주기](docs/pickup-lifecycle.md)
+
+**배포 중 로그인과 정기 작업 유지** — 두 앱 실행 공간이 PostgreSQL 세션을 공유하고, 현재 요청을 받는 앱만 만료 작업을 수행한다. 배포 전 실제 서비스 계정으로 필요한 파일을 읽을 수 있는지도 검사한다. [운영 장애와 복구](docs/operations-recovery.md)
+
+## 구조와 기술
 
 ```mermaid
 flowchart LR
-    SDK["Pleos NaviHelper SDK"] -->|"경로 · 위치 · ETA"| Vehicle["차량 앱 (AAOS · Kotlin)"]
-    Vehicle -->|"HTTPS 위치 · ETA · 승인 · 완료"| API["Spring Boot API (/api/v1)"]
-    Client["모바일 웹 · iOS"] -->|"HTTPS 참여 · 요청 · 화면 재조회"| API
-    API -->|"SSE 변경 신호 · 푸시 알림"| Client
-    API <-->|"JPA · 세션 저장"| DB[("PostgreSQL / H2")]
+    Vehicle["차량 앱"] <-->|"위치 · 경로 결과 · 픽업 상태"| API["Spring Boot API"]
+    Client["웹 · iOS"] <-->|"로그인 · 요청 · 조회"| API
+    API -->|"SSE 변경 신호 · 알림"| Client
+    API <--> DB[("PostgreSQL · 공유 세션")]
 ```
 
-> SSE는 상태가 바뀌었다는 신호만 가볍게 전달하며, 클라이언트는 신호를 받거나 다시 연결될 때 필요한 API를 조회해 최신 화면을 맞춥니다.
-
-### 패키지 구조
-
-```text
-src/main/java/app/majung/server/
-├── MajungServerApplication.java
-└── pickup/
-    ├── api/         # REST · SSE 컨트롤러
-    ├── service/     # 비즈니스 로직 · 경로 최적화 · 장소 검색
-    ├── domain/      # JPA 엔티티
-    ├── repository/  # Spring Data JPA 저장소
-    ├── security/    # OAuth2 로그인 · 세션 쿠키 · 권한 검사 · 요청 제한
-    ├── push/        # SSE 스트림 · Web Push(VAPID) · Apple APNs
-    ├── job/         # 픽업 만료 · 데이터 정리 스케줄러 (활성 슬롯 전용)
-    └── common/      # 공통 예외 처리 · Swagger 설정 · 배포 정책
-
-src/test/java/app/majung/server/pickup/
-└── api · service · security · push · job · common   # 계층별 단위 · 통합 테스트
-```
-
-### 기술 스택
-
-| 구분 | 구성 |
+| 영역 | 구성 |
 | --- | --- |
-| **백엔드** | Java 17 컴파일(JDK 25) · Spring Boot 4.0.8<br>Spring MVC · OAuth2 Client · Spring Data JPA |
-| **데이터** | PostgreSQL(운영) · H2(로컬/테스트)<br>Spring Session JDBC(`SPRING_SESSION`) |
-| **알림** | Server-Sent Events(SSE) · Web Push(VAPID)<br>Apple APNs · springdoc OpenAPI(Swagger UI) |
-| **인프라** | Caddy(HTTPS 리버스 프록시)<br>GitHub Actions · GCP 단일 VM Blue-Green |
+| API·인증 | Java 17 대상 컴파일 · JDK 25 · Spring Boot 4.0.8 · MVC · OAuth2 Client |
+| 데이터 | Spring Data JPA · PostgreSQL · Spring Session JDBC · 로컬/시험 H2 |
+| 실시간·명세 | SSE · Web Push/VAPID · APNs · springdoc OpenAPI |
+| 운영 | Caddy · GitHub Actions · 단일 GCP VM의 Blue-Green 전환 |
 
----
+<details>
+<summary>소스와 실험용 API 구분</summary>
 
-## 3. 보안 정책 및 검증 범위
+`src/main/java/app/majung/server/pickup/` 아래에 `api`, `service`, `domain`, `repository`, `security`, `push`, `job`, `common`을 나눴다. 시험도 같은 역할별로 `src/test/`에 둔다.
 
-- **역할별 접근 제어**: 모든 `/api/v1/` 요청은 로그인 세션, 차량 연결 권한, 운전자·탑승자(초대 링크 포함) 권한을 구분해 허용된 사용자만 조회·변경할 수 있습니다.
-- **위치 역전 방지 · 데이터 파기**: 차량 SDK 시각, 서버 수신 시각, 전송 순번, 목적지 버전을 함께 비교해 늦게 도착한 옛날 좌표가 최신 위치를 덮어쓰지 못하게 막으며, 픽업 종료 후에는 위치 조회를 차단합니다([픽업 생명주기](docs/pickup-lifecycle.md)).
+다중 픽업 계획 API(`/api/v1/pickup-plans`)는 별도 구현이다. 현재 [PickupPlanService](src/main/java/app/majung/server/pickup/service/PickupPlanService.java)는 예제 계획을 메모리에 보관한다. 영속화된 운영 픽업·차량 내비의 실제 경로와 연결된 기능으로 설명하지 않는다. 현재 사용자 흐름은 차량당 한 건씩 진행하는 픽업 대기열이다.
 
-| 구분 | 범위 |
-| --- | --- |
-| **자동화** | 차량·계정 연결, 초대·대기열, 위치·ETA 검증<br>Blue-Green · 공유 세션 (`124/125` Gradle · `29` deploy) |
-| **추후&nbsp;확인** | 실제 휴대전화·차량 간 전체 주행 흐름<br>iPhone 푸시 수신 · LTE 전환 · 실차 시동 복구 |
+</details>
 
----
+## 배포와 검증 범위
 
-## 4. 운영 환경 · Blue-Green 배포
+Caddy가 웹 정적 파일과 API를 분기한다. 새 앱을 대기 슬롯에 띄워 상태·DB·세션·빌드 정보를 확인한 뒤 트래픽을 전환한다. 두 슬롯이 같은 VM과 DB를 사용하므로 서버 자체의 이중화는 아니며, 앱 버전 롤백이 DB 구조까지 되돌리지는 않는다.
 
-운영 환경에서는 Caddy가 `https://majung.cloud` 요청을 받아 `/api/`는 Spring Boot 서버로, 정적 화면은 웹으로 분기합니다. [`/api/v1/health`](https://majung.cloud/api/v1/health)의 `status`, `revision`(배포 커밋), `slot`(`standalone`·`blue`·`green`)으로 현재 가동 슬롯을 확인할 수 있습니다.
+[Server CI](https://github.com/majung-team/majung-backend/actions)는 JUnit·빌드·배포 스크립트 검사와 웹 ETA 응답 대조를 수행한다. 시험 건수와 당시 결과는 [검증 기록](docs/stability-verification.md)에 남기고, 실제 차량·휴대전화의 장시간 주행이나 원격 푸시 수신은 별도 확인 대상으로 둔다.
 
-- **무중단 전환 흐름**: 단일 GCP VM 안의 `Blue(8081)`·`Green(8082)` 중 대기 중인 슬롯에 새 JAR을 띄워 DB·세션·커밋 버전을 점검한 뒤 Caddy 트래픽을 전환하고, 이상이 있으면 기존 슬롯으로 복구합니다.
-- **공유 세션 · 정기 작업**: 두 슬롯이 PostgreSQL 세션 테이블(`SPRING_SESSION`)을 함께 사용해 배포 중에도 로그인 상태를 유지하며, 만료·정리 스케줄러는 현재 트래픽을 받는 활성 슬롯에서만 동작합니다.
-- **운영 한계 · DB 주의**: 단일 VM 내부 전환이므로 서버/DB 자체의 이중화는 아니며, 전환 중 끊긴 SSE 연결은 클라이언트가 재접속 후 상태를 다시 조회합니다. 또한 이전 JAR 롤백이 DB 스키마까지 되돌리지는 않으므로 컬럼 삭제 같은 비호환 변경은 배포 전 역호환성 검토가 필요합니다.
-
----
-
-## 5. 상세 문서 및 관련 저장소
-
-| 분류 | 문서 |
-| --- | --- |
-| **계정&nbsp;·&nbsp;차량** | [차량 QR 최초 연결](docs/vehicle-enrollment.md) · [차량 계정 연결](docs/vehicle-account-link.md)<br>[내부 등록 및 권한 철회](docs/vehicle-registration.md) · [계정 및 사람 검색](docs/account-connections.md) |
-| **픽업&nbsp;·&nbsp;공유** | [픽업 요청 및 대기열](docs/ride-requests.md) · [차량 위치 최신성](docs/vehicle-state.md)<br>[도착 임박 푸시](docs/arrival-push.md) · [장소 변경 제안](docs/place-proposal.md) · [픽업 생명주기](docs/pickup-lifecycle.md) |
-| **운영&nbsp;·&nbsp;개발** | [Blue-Green 배포](docs/blue-green.md) · [GitHub Actions 배포](docs/github-actions.md) · [백업·운영 점검](docs/operations-recovery.md)<br>[복구·ETA·권한 검증](docs/stability-verification.md) · [현재 개발 기준](docs/revised-plan.md) · [기여 가이드](CONTRIBUTING.md) |
-| **허브&nbsp;·&nbsp;회고** | [전체 아키텍처](https://github.com/majung-team/majung/blob/main/docs/architecture.md) · [개발 현황](https://github.com/majung-team/majung/blob/main/docs/development-status.md)<br>[Wiki 기술 회고](https://github.com/majung-team/majung/wiki#%EA%B8%B0%EC%88%A0-%ED%9A%8C%EA%B3%A0) |
-
-| 저장소 | 역할 |
-| --- | --- |
-| [majung](https://github.com/majung-team/majung) | 전체 서비스 소개 · 설계 · 시연 |
-| [majung-vehicle-app](https://github.com/majung-team/majung-vehicle-app) | AAOS 차량 앱 및 Pleos SDK 연동 |
-| [majung-web](https://github.com/majung-team/majung-web) | 운전자 · 탑승자 모바일 웹 |
-| [majung-ios](https://github.com/majung-team/majung-ios) | SwiftUI iOS 모바일 앱 |
-| [majung-backend](https://github.com/majung-team/majung-backend) | Spring Boot API 및 운영 배포 |
+[Blue-Green 배포](docs/blue-green.md) · [요청 대기열](docs/ride-requests.md) · [차량 연결](docs/vehicle-account-link.md) · [장소 제안](docs/place-proposal.md) · [기여 가이드](CONTRIBUTING.md)
