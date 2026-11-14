@@ -176,4 +176,131 @@ public class PlaceSearchApiTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void keepsNationwideAirportAheadOfNearbyCommercialPrefixMatches() throws Exception {
+        String nearbyJson = """
+            {
+              "meta": { "is_end": false },
+              "documents": [
+                {
+                  "place_name": "인천공항밴",
+                  "road_address_name": "경기 안산시 단원구 선부광장남로 17",
+                  "category_name": "교통,수송 > 콜밴",
+                  "x": "126.8090",
+                  "y": "37.3340"
+                },
+                {
+                  "place_name": "인천공항택시 에이스팀",
+                  "road_address_name": "서울 금천구 시흥대로48길 12",
+                  "category_name": "교통,수송 > 콜택시",
+                  "x": "126.9001",
+                  "y": "37.4560"
+                }
+              ]
+            }
+            """;
+        String nationwideJson = """
+            {
+              "meta": { "is_end": false },
+              "documents": [
+                {
+                  "place_name": "인천국제공항",
+                  "road_address_name": "인천 영종구 공항로 272",
+                  "category_name": "교통,수송 > 공항",
+                  "x": "126.4505",
+                  "y": "37.4492"
+                },
+                {
+                  "place_name": "인천국제공항 제1여객터미널",
+                  "road_address_name": "인천 중구 공항로 271",
+                  "category_name": "교통,수송 > 공항",
+                  "x": "126.4514",
+                  "y": "37.4487"
+                }
+              ]
+            }
+            """;
+        HttpServer server = startKeywordMockServer(nearbyJson, nationwideJson);
+        try {
+            KakaoPlaceSearchService service = new KakaoPlaceSearchService(
+                    "test-rest-key",
+                    "http://127.0.0.1:" + server.getAddress().getPort());
+            PlaceSearchApi.SearchResponse response = service.search("인천공항", 1, 37.3208, 126.9482);
+            assertTrue(response.enabled());
+            assertEquals(4, response.items().size());
+            assertEquals("인천국제공항", response.items().get(0).label());
+            assertEquals("인천국제공항 제1여객터미널", response.items().get(1).label());
+            assertEquals("인천공항밴", response.items().get(2).label());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void keepsNearbyChainStoresAheadOfNationwideChainStores() throws Exception {
+        String nearbyJson = """
+            {
+              "meta": { "is_end": false },
+              "documents": [
+                {
+                  "place_name": "스타벅스 의왕삼동DT점",
+                  "road_address_name": "경기 의왕시 부곡중앙로 1",
+                  "category_group_name": "카페",
+                  "x": "126.9490",
+                  "y": "37.3215"
+                }
+              ]
+            }
+            """;
+        String nationwideJson = """
+            {
+              "meta": { "is_end": false },
+              "documents": [
+                {
+                  "place_name": "스타벅스 더북한산점",
+                  "road_address_name": "서울 은평구 대서문길 24",
+                  "category_group_name": "카페",
+                  "x": "126.9465",
+                  "y": "37.6580"
+                }
+              ]
+            }
+            """;
+        HttpServer server = startKeywordMockServer(nearbyJson, nationwideJson);
+        try {
+            KakaoPlaceSearchService service = new KakaoPlaceSearchService(
+                    "test-rest-key",
+                    "http://127.0.0.1:" + server.getAddress().getPort());
+            PlaceSearchApi.SearchResponse response = service.search("스타벅스", 1, 37.3208, 126.9482);
+            assertTrue(response.enabled());
+            assertEquals(2, response.items().size());
+            assertEquals("스타벅스 의왕삼동DT점", response.items().get(0).label());
+            assertEquals("스타벅스 더북한산점", response.items().get(1).label());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static HttpServer startKeywordMockServer(String nearbyJson, String nationwideJson) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v2/local/search/keyword.json", exchange -> {
+            String query = exchange.getRequestURI().getRawQuery();
+            String json = (query != null && query.contains("radius=20000")) ? nearbyJson : nationwideJson;
+            byte[] out = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.createContext("/v2/local/search/address.json", exchange -> {
+            byte[] out = """
+                { "meta": { "is_end": true }, "documents": [] }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
 }

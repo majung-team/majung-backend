@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class KakaoPlaceSearchService {
     private static final Logger log = LoggerFactory.getLogger(KakaoPlaceSearchService.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final Set<String> TRANSIT_HUB_CATEGORIES = Set.of(
+            "공항", "KTX정차역", "SRT정차역", "기차역", "지하철역", "고속,시외버스터미널", "터미널", "여객선터미널");
 
     private final String restApiKey;
     private final String baseUrl;
@@ -88,11 +91,17 @@ public class KakaoPlaceSearchService {
         }
 
         String normalizedQuery = normalize(query);
+        boolean hasNationwideTransitMatch = keywordResult != null && keywordResult.items().stream()
+                .anyMatch(item -> isTransitQueryMatch(item, normalizedQuery));
+        boolean hasExactKeywordMatch = keywordResult != null && keywordResult.items().stream()
+                .anyMatch(item -> normalize(item.label()).equals(normalizedQuery));
         Map<String, PlaceSearchApi.SearchItem> deduped = new LinkedHashMap<>();
         boolean hasNext = false;
         if (nearbyResult != null) {
             for (PlaceSearchApi.SearchItem item : nearbyResult.items()) {
-                if (isDirectQueryMatch(item, normalizedQuery)) {
+                boolean allowedByTransit = !hasNationwideTransitMatch || isTransitHub(item);
+                boolean allowedByExact = !hasExactKeywordMatch || normalize(item.label()).equals(normalizedQuery);
+                if (isDirectQueryMatch(item, normalizedQuery) && allowedByTransit && allowedByExact) {
                     deduped.putIfAbsent(dedupeKey(item), item);
                 }
             }
@@ -131,6 +140,25 @@ public class KakaoPlaceSearchService {
         if (normalizedQuery.isEmpty() || item == null || item.label() == null) return false;
         String normalizedLabel = normalize(item.label());
         return normalizedLabel.equals(normalizedQuery) || normalizedLabel.startsWith(normalizedQuery);
+    }
+
+    private static boolean isTransitHub(PlaceSearchApi.SearchItem item) {
+        return item != null && item.category() != null && TRANSIT_HUB_CATEGORIES.contains(item.category().strip());
+    }
+
+    private static boolean isTransitQueryMatch(PlaceSearchApi.SearchItem item, String normalizedQuery) {
+        if (!isTransitHub(item) || normalizedQuery.isEmpty() || item.label() == null) return false;
+        String normalizedLabel = normalize(item.label());
+        if (normalizedLabel.contains(normalizedQuery)) return true;
+        return normalizedQuery.length() >= 3 && isOrderedSubsequence(normalizedLabel, normalizedQuery);
+    }
+
+    private static boolean isOrderedSubsequence(String label, String query) {
+        int qi = 0;
+        for (int li = 0; li < label.length() && qi < query.length(); li++) {
+            if (label.charAt(li) == query.charAt(qi)) qi++;
+        }
+        return qi == query.length();
     }
 
     private record UpstreamPage(List<PlaceSearchApi.SearchItem> items, boolean hasNext) { }
