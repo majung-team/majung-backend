@@ -159,3 +159,15 @@ Actuator의 Prometheus 지표는 blue `127.0.0.1:9081`, green `127.0.0.1:9082`�
 
 - [단일 VM Blue-Green 배포와 예약 백업은 왜 중간에 멈췄을까?](https://github.com/majung-team/majung/wiki/%EB%8B%A8%EC%9D%BC-VM-Blue-Green-%EB%B0%B0%ED%8F%AC%EC%99%80-%EC%98%88%EC%95%BD-%EB%B0%B1%EC%97%85%EC%9D%80-%EC%99%9C-%EC%A4%91%EA%B0%84%EC%97%90-%EB%A9%88%EC%B7%84%EC%9D%84%EA%B9%8C)
 - 2026-11-12 기준 `deploy/` Python 배포·운영 테스트는 29개, 백엔드 Gradle 테스트는 총 125건 중 `124 passed, 1 skipped`를 유지하고 있다.
+
+## 2026-11-14 복원 검사 실행 경로 수정
+
+11월 8일 예약 복원 검사에서 `ClassNotFoundException`이 발생했다. 백업 생성과 SQL 복원은 성공했지만, 패키지 이동 후에도 운영 스크립트가 예전 `app.majung.server.pickup.RestoreVerification`을 실행하고 있었다. 실행 경로를 `app.majung.server.pickup.common.RestoreVerification`으로 수정했다.
+
+`RestoreEntrypointTest`는 운영 스크립트에 지정한 클래스를 실제로 읽어 `main` 진입점을 확인하고, 허용하지 않은 인수를 넣었을 때 실행을 거부하는지 검사한다. 수정 전에는 같은 테스트가 `ClassNotFoundException`으로 실패했고 수정 후 통과했다. 운영 DB를 거부하는 기존 제한은 유지한다.
+
+- Gradle 테스트 총 127건 중 126건 통과, 1건 제외. `bootJar` 성공
+- 배포·운영 Python 테스트 29건 통과
+- 운영 스크립트 원본을 별도 보관한 뒤 실행 경로 한 줄만 교체. 파일 소유자와 권한 유지
+- 11월 14일 14:59 KST 실제 복원 검사 성공(30.31초): 핵심 테이블 9개, 스키마 검증, health, 세션 인증·계정 조회·픽업 조회·로그아웃 후 차단 통과
+- 실패 기록 제거와 임시 DB 0개 확인. 운영 DB를 덮어쓰거나 운영 서버를 재시작하지 않음

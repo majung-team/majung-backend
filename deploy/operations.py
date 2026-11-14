@@ -114,7 +114,7 @@ def restore():
         functional.unlink(missing_ok=True)
         with os.fdopen(log_fd, 'wb') as log:
             process = subprocess.Popen(['/usr/bin/java', '-Xms32m', '-Xmx192m', '-XX:MaxMetaspaceSize=160m',
-                '-Dloader.main=app.majung.server.pickup.RestoreVerification',
+                '-Dloader.main=app.majung.server.pickup.common.RestoreVerification',
                 '-cp', str(jar), 'org.springframework.boot.loader.launch.PropertiesLauncher'],
                 env=child_env, stdout=log, stderr=log)
             healthy = False
